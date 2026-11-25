@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { SOLVED, applyMove, applyMoves, mulberry32, randomScramble, type Cube, type Move } from '../core'
+import { SOLVED, applyMoves, getModel, mulberry32, randomScramble, type Cube } from '../core'
 import { applyUserMove, isHalfTurnPartial } from './track'
 
+const model = getModel(3)
 const base: Cube = applyMoves(SOLVED, randomScramble(25, mulberry32(4)))
 
-function play(next: Cube | null, moves: Move[]) {
-  let extra: Move[] = []
+function play(next: Cube | null, moves: string[]) {
+  let extra: string[] = []
   const advances: boolean[] = []
   for (const move of moves) {
-    const result = applyUserMove(base, next, extra, move)
+    const result = applyUserMove(model, base, next, extra, move)
     extra = result.extra
     advances.push(result.advance)
   }
@@ -17,17 +18,17 @@ function play(next: Cube | null, moves: Move[]) {
 
 describe('applyUserMove', () => {
   it('advances on the expected move', () => {
-    expect(play(applyMove(base, 'R'), ['R'])).toEqual({ extra: [], advances: [true] })
+    expect(play(model.apply(base, 'R'), ['R'])).toEqual({ extra: [], advances: [true] })
   })
 
   it('tracks a wrong move and its undo', () => {
-    const next = applyMove(base, 'R')
+    const next = model.apply(base, 'R')
     expect(play(next, ["R'"])).toEqual({ extra: ["R'"], advances: [false] })
     expect(play(next, ["R'", 'R'])).toEqual({ extra: [], advances: [false, false] })
   })
 
   it('handles half turns made of two quarter turns', () => {
-    const next = applyMove(base, 'F2')
+    const next = model.apply(base, 'F2')
     const first = play(next, ['F'])
     expect(first.extra).toEqual(['F'])
     expect(isHalfTurnPartial('F2', first.extra)).toBe(true)
@@ -36,12 +37,12 @@ describe('applyUserMove', () => {
   })
 
   it('accepts equivalent sequences', () => {
-    const next = applyMove(base, 'y')
+    const next = model.apply(base, 'y')
     expect(play(next, ['U', "E'", "D'"]).advances).toEqual([false, false, true])
   })
 
   it('pops the last extra move when inverted', () => {
-    expect(applyUserMove(base, null, ['U', 'R'], "R'").extra).toEqual(['U'])
+    expect(applyUserMove(model, base, null, ['U', 'R'], "R'").extra).toEqual(['U'])
   })
 
   it('never advances without a next state', () => {

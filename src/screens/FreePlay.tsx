@@ -21,7 +21,7 @@ interface BoardProps {
   initial: BoardState
   persist: boolean
   onChange(state: BoardState): void
-  onTeach(cube: Cube): void
+  onTeach(n: 3 | 4, cube: Cube): void
 }
 
 function Board({ model, initial, persist, onChange, onTeach }: BoardProps) {
@@ -131,12 +131,18 @@ function Board({ model, initial, persist, onChange, onTeach }: BoardProps) {
           <button
             className="btn primary wide"
             disabled={scrambling || solved}
-            onClick={() => onTeach(toHomeOrientation(cubeRef.current).cube)}
+            onClick={() => onTeach(3, toHomeOrientation(cubeRef.current).cube)}
           >
             Dạy tôi giải từ đây
           </button>
         ) : (
-          <p className="hint-line wide">Bài học cho 4×4 đang được xây dựng.</p>
+          <button
+            className="btn primary wide"
+            disabled={scrambling || solved}
+            onClick={() => onTeach(4, cubeRef.current)}
+          >
+            Dạy tôi giải từ đây
+          </button>
         )}
       </footer>
     </>
@@ -147,7 +153,7 @@ interface Props {
   persist: boolean
   initialSize?: Size
   onHome(): void
-  onTeach(cube: Cube): void
+  onTeach(n: 3 | 4, cube: Cube): void
 }
 
 export function FreePlay({ persist, initialSize, onHome, onTeach }: Props) {

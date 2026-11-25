@@ -1,44 +1,28 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CubeCanvas, type CubeCanvasHandle } from '../components/CubeCanvas'
+import { getModel, toHomeOrientation, type Cube } from '../core'
 import {
-  ALGS,
-  applyMove,
-  applyMoves,
-  formatMoves,
-  getModel,
-  invertMove,
-  isSolved,
-  locatePiece,
-  solve,
-  toHomeOrientation,
-  type Cube,
-  type Move,
-  type StageId,
-} from '../core'
-import { buildLesson, cubeAt } from '../lesson/lesson'
+  buildItems,
+  buildPlan3,
+  buildPlan4,
+  cubeAt,
+  describeMove,
+  focusAt,
+  fullStageKeys,
+  type LessonPlan,
+} from '../lesson/plan'
 import { applyUserMove, isHalfTurnPartial } from '../lesson/track'
-import {
-  ALG_NAME,
-  DRAG_HINT,
-  HALF_TURN_MESSAGE,
-  MOVE_DESC,
-  STAGE_ALGS,
-  STAGE_ORDER,
-  STAGE_TEXT,
-  SETUP_HINT,
-  explainStep,
-  offTrackMessage,
-} from '../lesson/texts'
+import { DRAG_HINT, HALF_TURN_MESSAGE, SETUP_HINT, offTrackMessage } from '../lesson/texts'
 import { saveLesson } from '../storage'
 
-const MODEL = getModel(3)
 const MOVE_MS = 350
 const DRAG_MS = 180
 
 interface Props {
+  n: 3 | 4
   cube: Cube
   initialCursor: number
-  initialExtra: Move[]
+  initialExtra: string[]
   persist: boolean
   onHome(): void
   onFinish(): void
@@ -50,7 +34,39 @@ interface WakeLockSentinelLike {
   release(): Promise<void>
 }
 
-export function Lesson({
+export function Lesson(props: Props) {
+  const { n, cube, onHome } = props
+  const [plan, setPlan] = useState<LessonPlan | null>(() => (n === 3 ? buildPlan3(cube) : null))
+
+  useEffect(() => {
+    if (n === 3) return
+    const timer = window.setTimeout(() => setPlan(buildPlan4(cube)), 30)
+    return () => window.clearTimeout(timer)
+  }, [n, cube])
+
+  if (!plan) {
+    return (
+      <main className="screen lesson">
+        <header className="topbar">
+          <div className="topbar-row">
+            <div className="topbar-title">
+              <strong>Bài học 4×4</strong>
+            </div>
+            <button className="btn small" onClick={onHome}>
+              Về trang đầu
+            </button>
+          </div>
+        </header>
+        <p className="loading-line">Đang tính lời giải…</p>
+      </main>
+    )
+  }
+  return <LessonBody {...props} plan={plan} />
+}
+
+function LessonBody({
+  plan,
+  n,
   cube,
   initialCursor,
   initialExtra,
@@ -59,27 +75,27 @@ export function Lesson({
   onFinish,
   onRestart,
   onReenter,
-}: Props) {
-  const solution = useMemo(() => solve(cube), [cube])
-  const items = useMemo(() => buildLesson(solution), [solution])
+}: Props & { plan: LessonPlan }) {
+  const model = useMemo(() => getModel(n), [n])
+  const items = useMemo(() => buildItems(plan), [plan])
   const [cursor, setCursor] = useState(() => Math.max(0, Math.min(initialCursor, items.length - 1)))
-  const [extra, setExtra] = useState<Move[]>(initialExtra)
+  const [extra, setExtra] = useState<string[]>(initialExtra)
   const [busy, setBusy] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const canvas = useRef<CubeCanvasHandle>(null)
   const busyRef = useRef(false)
 
   const item = items[cursor]
-  const current = useMemo(() => cubeAt(cube, solution, items, cursor), [cube, solution, items, cursor])
-  const step = item.type === 'move' ? solution.steps[item.stepIndex] : null
-  const highlight = useMemo(
-    () => (step?.piece ? (locatePiece(current, step.piece)?.facelets ?? null) : null),
-    [step, current],
-  )
+  const current = useMemo(() => cubeAt(plan, items, cursor), [plan, items, cursor])
+  const step = item.type === 'move' ? plan.steps[item.stepIndex] : null
+  const highlight = useMemo(() => {
+    const focus = focusAt(plan, items, cursor)
+    return focus.length > 0 ? focus : null
+  }, [plan, items, cursor])
 
   const offTrack = extra.length > 0
-  const displayed = useMemo(() => applyMoves(current, extra), [current, extra])
-  const handleUserMove = useRef<(move: Move) => void>(() => undefined)
+  const displayed = useMemo(() => model.applyAll(current, extra), [model, current, extra])
+  const handleUserMove = useRef<(move: string) => void>(() => undefined)
 
   useEffect(() => {
     canvas.current?.setState(displayed, offTrack ? null : highlight)
@@ -91,13 +107,13 @@ export function Lesson({
 
   useEffect(() => {
     const handle = canvas.current
-    handle?.setInteractive(item.type === 'move' ? (move) => handleUserMove.current(move as Move) : null)
+    handle?.setInteractive(item.type === 'move' ? (move) => handleUserMove.current(move) : null)
     return () => handle?.setInteractive(null)
   }, [item.type])
 
   useEffect(() => {
-    if (persist) saveLesson(cube, cursor, extra)
-  }, [cube, cursor, extra, persist])
+    if (persist) saveLesson(n, cube, cursor, extra)
+  }, [n, cube, cursor, extra, persist])
 
   useEffect(() => {
     let sentinel: WakeLockSentinelLike | null = null
@@ -139,7 +155,7 @@ export function Lesson({
     run(async () => {
       if (item.type === 'done') return
       if (item.type === 'move') {
-        await canvas.current?.animateMove(item.move, current, cubeAt(cube, solution, items, cursor + 1), MOVE_MS)
+        await canvas.current?.animateMove(item.move, current, cubeAt(plan, items, cursor + 1), MOVE_MS)
       }
       setCursor(cursor + 1)
     })
@@ -150,21 +166,21 @@ export function Lesson({
       const previous = items[cursor - 1]
       if (previous.type === 'move') {
         await canvas.current?.animateMove(
-          invertMove(previous.move),
+          model.invert(previous.move),
           current,
-          cubeAt(cube, solution, items, cursor - 1),
+          cubeAt(plan, items, cursor - 1),
           MOVE_MS,
         )
       }
       setCursor(cursor - 1)
     })
 
-  const onUserMove = (move: Move) => {
+  const onUserMove = (move: string) => {
     if (busyRef.current || item.type !== 'move') return
-    const next = cubeAt(cube, solution, items, cursor + 1)
-    const result = applyUserMove(current, next, extra, move)
+    const nextCube = cubeAt(plan, items, cursor + 1)
+    const result = applyUserMove(model, current, nextCube, extra, move)
     void run(async () => {
-      await canvas.current?.animateMove(move, displayed, applyMove(displayed, move), DRAG_MS)
+      await canvas.current?.animateMove(move, displayed, model.apply(displayed, move), DRAG_MS)
       if (result.advance) setCursor(cursor + 1)
       setExtra(result.extra)
     })
@@ -178,32 +194,36 @@ export function Lesson({
     run(async () => {
       const last = extra.at(-1)
       if (!last) return
-      const inverse = invertMove(last)
-      await canvas.current?.animateMove(inverse, displayed, applyMove(displayed, inverse), DRAG_MS)
+      const inverse = model.invert(last)
+      await canvas.current?.animateMove(inverse, displayed, model.apply(displayed, inverse), DRAG_MS)
       setExtra(extra.slice(0, -1))
     })
 
   const continueFromHere = () => {
-    if (isSolved(displayed)) onFinish()
-    else onRestart(toHomeOrientation(displayed).cube)
+    if (model.isSolved(displayed)) onFinish()
+    else onRestart(n === 3 ? toHomeOrientation(displayed).cube : displayed)
   }
 
   const replay = () =>
     run(async () => {
       if (item.type !== 'move') return
-      await canvas.current?.animateMove(item.move, current, cubeAt(cube, solution, items, cursor + 1), MOVE_MS)
+      await canvas.current?.animateMove(item.move, current, cubeAt(plan, items, cursor + 1), MOVE_MS)
       canvas.current?.setState(current, highlight)
     })
 
-  const stage: StageId | null =
-    item.type === 'intro' ? item.stage : step ? step.stage : (solution.steps.at(-1)?.stage ?? null)
-  const stageNumber = stage ? STAGE_ORDER.indexOf(stage) + 1 : STAGE_ORDER.length
-  const title = item.type === 'done' ? 'Hoàn thành' : stage ? STAGE_TEXT[stage].title : ''
+  const stageKey: string | null =
+    item.type === 'intro' ? item.stage : step ? step.stage : (plan.steps.at(-1)?.stage ?? null)
+  const stageKeys = fullStageKeys(n)
+  const stageInfo = plan.stages.find((entry) => entry.key === stageKey) ?? null
+  const stageNumber = stageKey ? stageKeys.indexOf(stageKey) + 1 : stageKeys.length
+  const title = item.type === 'done' ? 'Hoàn thành' : (stageInfo?.title ?? '')
 
-  const chipClass = (phase: 'setup' | 'alg', index: number) => {
+  const phaseRank = { setup: 0, alg: 1, cleanup: 2 } as const
+  const chipClass = (phase: 'setup' | 'alg' | 'cleanup', index: number) => {
     if (item.type !== 'move') return 'chip'
     if (item.phase === phase && item.indexInPhase === index) return 'chip current'
-    const done = phase === 'setup' ? item.phase === 'alg' || index < item.indexInPhase : item.phase === 'alg' && index < item.indexInPhase
+    const done =
+      phaseRank[phase] < phaseRank[item.phase] || (item.phase === phase && index < item.indexInPhase)
     return done ? 'chip done' : 'chip'
   }
 
@@ -214,7 +234,7 @@ export function Lesson({
           <div className="topbar-title">
             <strong>{title}</strong>
             <span>
-              Giai đoạn {stageNumber}/{STAGE_ORDER.length}
+              Giai đoạn {stageNumber}/{stageKeys.length}
             </span>
           </div>
           <button className="icon-btn" aria-label="Menu" onClick={() => setMenuOpen((o) => !o)}>
@@ -222,9 +242,11 @@ export function Lesson({
           </button>
           {menuOpen && (
             <div className="menu">
-              <button className="btn" onClick={() => onReenter(toHomeOrientation(displayed).cube)}>
-                Nhập lại khối
-              </button>
+              {n === 3 && (
+                <button className="btn" onClick={() => onReenter(toHomeOrientation(displayed).cube)}>
+                  Nhập lại khối
+                </button>
+              )}
               <button className="btn" onClick={onHome}>
                 Về trang đầu
               </button>
@@ -237,7 +259,7 @@ export function Lesson({
       </header>
 
       <div className="canvas-wrap">
-        <CubeCanvas ref={canvas} model={MODEL} initial={displayed} initialHighlight={offTrack ? null : highlight} />
+        <CubeCanvas ref={canvas} model={model} initial={displayed} initialHighlight={offTrack ? null : highlight} />
         <button className="btn small reset-view" onClick={() => canvas.current?.resetCamera()}>
           Đặt lại góc nhìn
         </button>
@@ -245,15 +267,15 @@ export function Lesson({
 
       <section className="panel">
         <div className="panel-body">
-          {item.type === 'intro' && (
+          {item.type === 'intro' && stageInfo && (
             <>
-              <h2>{STAGE_TEXT[item.stage].title}</h2>
-              <p>{STAGE_TEXT[item.stage].goal}</p>
-              {STAGE_ALGS[item.stage].length > 0 && (
+              <h2>{stageInfo.title}</h2>
+              <p>{stageInfo.goal}</p>
+              {stageInfo.algs.length > 0 && (
                 <ul className="algs">
-                  {STAGE_ALGS[item.stage].map((id) => (
-                    <li key={id}>
-                      {ALG_NAME[id]} : <code>{formatMoves(ALGS[id])}</code>
+                  {stageInfo.algs.map((alg) => (
+                    <li key={alg.name}>
+                      {alg.name} : <code>{alg.notation}</code>
                     </li>
                   ))}
                 </ul>
@@ -267,7 +289,7 @@ export function Lesson({
           )}
           {item.type === 'move' && step && !offTrack && (
             <>
-              <p className="explain">{explainStep(step)}</p>
+              <p className="explain">{step.explain}</p>
               {item.phase === 'setup' && <p className="hint">{SETUP_HINT}</p>}
               {step.setup.length > 0 && (
                 <div className="chip-row">
@@ -281,9 +303,7 @@ export function Lesson({
               )}
               {step.alg.length > 0 && (
                 <div className="chip-row">
-                  <span className="chip-label">
-                    {step.algId ? `${ALG_NAME[step.algId]} × ${step.repeat}` : 'Thực hiện'}
-                  </span>
+                  <span className="chip-label">{step.algLabel ?? 'Thực hiện'}</span>
                   {step.alg.map((m, i) => (
                     <span key={i} className={chipClass('alg', i)}>
                       {m}
@@ -291,7 +311,17 @@ export function Lesson({
                   ))}
                 </div>
               )}
-              <p className="move-desc">{MOVE_DESC[item.move]}</p>
+              {step.cleanup.length > 0 && (
+                <div className="chip-row">
+                  <span className="chip-label">Trả lại</span>
+                  {step.cleanup.map((m, i) => (
+                    <span key={i} className={chipClass('cleanup', i)}>
+                      {m}
+                    </span>
+                  ))}
+                </div>
+              )}
+              <p className="move-desc">{describeMove(n, item.move)}</p>
               {item.stepIndex === 0 && <p className="hint">{DRAG_HINT}</p>}
             </>
           )}

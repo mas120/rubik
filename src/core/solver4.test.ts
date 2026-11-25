@@ -4,10 +4,10 @@ import { getModel } from './model'
 import { validate } from './validate'
 import {
   ALGS4,
-  CENTRE_CYCLE_INFO,
-  WING_CYCLE_INFO,
+  searchCentreCycle3,
+  searchWingCycle3,
   getWingCycles,
-  ROTATIONS4,
+  getRotations4,
   centresSolved,
   edgesPaired,
   getCentreCycles,
@@ -74,7 +74,7 @@ describe('solver4 sanity', () => {
   })
 
   it('relabels base algorithms like cube conjugation', () => {
-    for (const rotation of ROTATIONS4) {
+    for (const rotation of getRotations4()) {
       for (const alg of Object.values(ALGS4)) {
         const relabelled = relableMoves4(alg, rotation.map)
         for (let seed = 0; seed < 20; seed++) {
@@ -158,10 +158,11 @@ describe('centre cycle', () => {
     const moved = perm.map((v, i) => (v === i ? -1 : i)).filter((i) => i >= 0)
     expect(moved).toHaveLength(3)
     for (const i of moved) expect(CENTRE_IDX).toContain(i)
-    expect(CENTRE_CYCLE_INFO.total).toBe(5832)
-    expect(CENTRE_CYCLE_INFO.qualified).toBeGreaterThan(0)
-    expect(CENTRE_CYCLE_INFO.pure).toBeGreaterThan(0)
-    console.log('centreCycle3', moves.join(' '), JSON.stringify({ ...CENTRE_CYCLE_INFO, chosen: undefined }), 'perm', moved.map((i) => i + '<-' + perm[i]).join(' '))
+    const search = searchCentreCycle3()
+    expect(search.info.total).toBe(5832)
+    expect(search.info.qualified).toBeGreaterThan(0)
+    expect(search.info.pure).toBeGreaterThan(0)
+    expect(search.moves).toEqual(moves)
   })
 
   it('classic alg is a 3-cycle', () => {
@@ -202,7 +203,9 @@ describe('wing cycle', () => {
     const moved = perm.map((v, i) => (v === i ? -1 : i)).filter((i) => i >= 0)
     expect(moved).toHaveLength(6)
     for (const i of moved) expect(WING_IDX.has(i)).toBe(true)
-    expect(WING_CYCLE_INFO.qualified).toBeGreaterThan(0)
+    const search = searchWingCycle3()
+    expect(search.info.qualified).toBeGreaterThan(0)
+    expect(search.moves).toEqual(moves)
   })
 
   it('reaches every oriented wing 3-cycle and conjugation is exact', () => {
@@ -326,7 +329,7 @@ describe('solve4 full', () => {
           { stepsAvg: avg(list.map((m) => m.steps)), stepsMax: Math.max(...list.map((m) => m.steps)), movesAvg: avg(list.map((m) => m.moves)), movesMax: Math.max(...list.map((m) => m.moves)) },
         ]),
       ),
-      wing: { info: { ...WING_CYCLE_INFO }, dist: getWingCycles().reduce((h: Record<number, number>, c) => ((h[c.seq.length] = (h[c.seq.length] ?? 0) + 1), h), {}) },
+      wing: { info: { ...searchWingCycle3().info }, dist: getWingCycles().reduce((h: Record<number, number>, c) => ((h[c.seq.length] = (h[c.seq.length] ?? 0) + 1), h), {}) },
       centreDist: getCentreCycles().reduce((h: Record<number, number>, c) => ((h[c.seq.length] = (h[c.seq.length] ?? 0) + 1), h), {}),
       cases: Object.fromEntries([...perCase].map(([k, v]) => [k, v])),
     }

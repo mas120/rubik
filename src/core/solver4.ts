@@ -16,6 +16,8 @@ export const ALGS4: Record<string, string[]> = {
   pairFlip: ['R', 'U', "R'", 'F', "R'", "F'", 'R'],
   ollParity: ['2R2', 'B2', 'U2', '2L', 'U2', "2R'", 'U2', '2R', 'U2', 'F2', '2R', 'F2', "2L'", 'B2', '2R2'],
   pllParity: ['2R2', 'U2', '2R2', 'Uw2', '2R2', 'Uw2'],
+  centreCycle3: ['2U', 'R', '2F', "R'", "2U'", 'R', "2F'", "R'"],
+  wingCycle3: ['2U', 'R', 'U', "R'", "2U'", 'R', "U'", "R'"],
 }
 
 export type Stage4 = 'centres' | 'edges' | 'parity' | StageId
@@ -250,7 +252,12 @@ function buildRotations4(): Rotation4[] {
   }))
 }
 
-export const ROTATIONS4: readonly Rotation4[] = buildRotations4()
+let rotations4: readonly Rotation4[] | null = null
+
+export function getRotations4(): readonly Rotation4[] {
+  if (!rotations4) rotations4 = buildRotations4()
+  return rotations4
+}
 
 const CYCLE_MOVES: string[] = (() => {
   const outer = FACES.flatMap((face) => [face, `${face}'`, `${face}2`])
@@ -279,7 +286,7 @@ export interface CentreCycleInfo {
   chosen: string[]
 }
 
-function findCentreCycle3(): { moves: string[]; info: CentreCycleInfo } {
+export function searchCentreCycle3(): { moves: string[]; info: CentreCycleInfo } {
   const inner = CYCLE_MOVES.filter((move) => move.startsWith('2'))
   const outer = CYCLE_MOVES.filter((move) => !move.startsWith('2'))
   const qualifiers: { moves: string[]; pure: boolean; halves: number; order: number }[] = []
@@ -318,9 +325,6 @@ function findCentreCycle3(): { moves: string[]; info: CentreCycleInfo } {
   }
 }
 
-const CENTRE_CYCLE_SEARCH = findCentreCycle3()
-export const CENTRE_CYCLE_INFO: CentreCycleInfo = CENTRE_CYCLE_SEARCH.info
-ALGS4.centreCycle3 = CENTRE_CYCLE_SEARCH.moves
 
 function canonTriple(triple: readonly [number, number, number]): [number, number, number] {
   const rots: [number, number, number][] = [
@@ -436,7 +440,7 @@ function wingCycleStructure(perm: Uint8Array): { moved: number[] } | null {
   return { moved }
 }
 
-function findWingCycle3(): { moves: string[]; info: WingCycleInfo } {
+export function searchWingCycle3(): { moves: string[]; info: WingCycleInfo } {
   const inner = CYCLE_MOVES.filter((move) => move.startsWith('2'))
   const outer = CYCLE_MOVES.filter((move) => !move.startsWith('2'))
   const families: { name: string; a: string[]; y: string[]; z: string[] }[] = [
@@ -471,9 +475,6 @@ function findWingCycle3(): { moves: string[]; info: WingCycleInfo } {
   throw new Error('No wing 3-cycle commutator')
 }
 
-const WING_CYCLE_SEARCH = findWingCycle3()
-export const WING_CYCLE_INFO: WingCycleInfo = WING_CYCLE_SEARCH.info
-ALGS4.wingCycle3 = WING_CYCLE_SEARCH.moves
 
 export interface WingCycle {
   moved: number[]
@@ -557,7 +558,7 @@ function buildCandidates(names: readonly string[]): Candidate[] {
   for (const name of names) {
     const variants = [ALGS4[name], mirrorMoves4(ALGS4[name])]
     for (const variant of variants) {
-      for (const rotation of ROTATIONS4) {
+      for (const rotation of getRotations4()) {
         const moves = relableMoves4(variant, rotation.map)
         const perm = permOfMoves(moves)
         const key = permKey(perm)
@@ -599,7 +600,14 @@ interface Setup {
 
 const OUTER_MOVES = FACES.flatMap((face) => [face, `${face}'`, `${face}2`])
 
-const SETUPS: Setup[] = (() => {
+let setupsCache: Setup[] | null = null
+
+function getSetups(): Setup[] {
+  if (!setupsCache) setupsCache = buildSetups()
+  return setupsCache
+}
+
+function buildSetups(): Setup[] {
   const setups: { moves: string[] }[] = [{ moves: [] }]
   for (const first of OUTER_MOVES) setups.push({ moves: [first] })
   for (const first of OUTER_MOVES) {
@@ -612,7 +620,7 @@ const SETUPS: Setup[] = (() => {
     const cleanup = invertMoves4(moves)
     return { moves, perm: permOfMoves(moves), cleanup, cleanupPerm: permOfMoves(cleanup) }
   })
-})()
+}
 
 interface Macro {
   perm: Uint8Array
@@ -657,7 +665,7 @@ function buildCentreMacros(candidates: Candidate[]): CentreMacro[] {
   const macros: CentreMacro[] = []
   let genOrder = 0
   for (const candidate of candidates) {
-    for (const setup of SETUPS) {
+    for (const setup of getSetups()) {
       const modes = setup.moves.length === 0 ? [false] : [true, false]
       for (const useCleanup of modes) {
         const cleanup = useCleanup ? setup.cleanup : []
@@ -696,7 +704,7 @@ function buildEdgeMacros(candidates: Candidate[]): EdgeMacro[] {
   const macros: EdgeMacro[] = []
   let genOrder = 0
   for (const candidate of candidates) {
-    for (const setup of SETUPS) {
+    for (const setup of getSetups()) {
       const modes = setup.moves.length === 0 ? [false] : [true, false]
       for (const useCleanup of modes) {
         const cleanup = useCleanup ? setup.cleanup : []
@@ -1073,7 +1081,7 @@ interface ParityChoice {
 function findParityMacro(state: readonly number[], algName: 'ollParity' | 'pllParity', kind: 'edgeFlip' | 'parity'): ParityChoice {
   const alg = ALGS4[algName]
   const algPerm = permOfMoves(alg)
-  for (const setup of SETUPS) {
+  for (const setup of getSetups()) {
     const modes = setup.moves.length === 0 ? [false] : [true, false]
     for (const useCleanup of modes) {
       const cleanup = useCleanup ? setup.cleanup : []

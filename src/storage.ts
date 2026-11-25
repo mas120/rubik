@@ -19,16 +19,19 @@ const INPUT_KEY = 'rubik.input.v1'
 const FREE_KEY = 'rubik.free.v1'
 const FREE4_KEY = 'rubik.free4.v1'
 const FREE_SIZE_KEY = 'rubik.free.size'
+const SIZE_KEY = 'rubik.size'
 
 export interface SavedLesson {
+  n: 3 | 4
   cube: Cube
   cursor: number
-  extra: Move[]
+  extra: string[]
 }
 
-export function saveLesson(cube: Cube, cursor: number, extra: readonly Move[] = []): void {
+export function saveLesson(n: 3 | 4, cube: Cube, cursor: number, extra: readonly string[] = []): void {
   try {
-    localStorage.setItem(LESSON_KEY, JSON.stringify({ cube: cubeToString(cube), cursor, extra }))
+    const payload = { cube: cubeToString(cube), cursor, extra, ...(n === 4 ? { n } : {}) }
+    localStorage.setItem(LESSON_KEY, JSON.stringify(payload))
   } catch {
     return
   }
@@ -42,21 +45,41 @@ export function clearLesson(): void {
   }
 }
 
+function cheapValid4(cube: Cube): boolean {
+  if (cube.length !== 96) return false
+  const counts: Record<string, number> = {}
+  for (const face of cube) counts[face] = (counts[face] ?? 0) + 1
+  return FACES.every((face) => counts[face] === 16)
+}
+
 export function loadLesson(): SavedLesson | null {
   try {
     const raw = localStorage.getItem(LESSON_KEY)
     if (!raw) return null
-    const data = JSON.parse(raw) as { cube: string; cursor: number; extra?: string[] }
-    const extra = data.extra === undefined ? [] : parseMoves(data.extra.join(' '))
-    if (extra.some((m) => /^[xyz]/.test(m))) throw new Error('invalid')
-    const cube = cubeFromString(data.cube)
-    const normalised = normalize(cube)
-    if (!normalised || normalised.some((s, i) => s !== cube[i]) || validate(cube).length > 0) {
-      throw new Error('invalid')
-    }
-    solve(cube)
+    const data = JSON.parse(raw) as { cube: string; cursor: number; extra?: string[]; n?: number }
+    const n = data.n === undefined ? 3 : data.n
+    if (n !== 3 && n !== 4) throw new Error('invalid')
     if (!Number.isInteger(data.cursor) || data.cursor < 0) throw new Error('invalid')
-    return { cube, cursor: data.cursor, extra }
+    if (n === 3) {
+      const extra = data.extra === undefined ? [] : parseMoves(data.extra.join(' '))
+      if (extra.some((m) => /^[xyz]/.test(m))) throw new Error('invalid')
+      const cube = cubeFromString(data.cube)
+      const normalised = normalize(cube)
+      if (!normalised || normalised.some((s, i) => s !== cube[i]) || validate(cube).length > 0) {
+        throw new Error('invalid')
+      }
+      solve(cube)
+      return { n, cube, cursor: data.cursor, extra }
+    }
+    const model = getModel(4)
+    const extra = data.extra === undefined ? [] : model.parse(data.extra.join(' '))
+    if (extra.some((m) => /^[xyz]/.test(m))) throw new Error('invalid')
+    const cube = [...data.cube].map((ch) => {
+      if (!FACES.includes(ch as Face)) throw new Error('invalid')
+      return ch as Face
+    })
+    if (!cheapValid4(cube)) throw new Error('invalid')
+    return { n, cube, cursor: data.cursor, extra }
   } catch {
     clearLesson()
     return null
@@ -177,6 +200,22 @@ export function loadFreeSize(): 3 | 4 {
 export function saveFreeSize(size: 3 | 4): void {
   try {
     localStorage.setItem(FREE_SIZE_KEY, String(size))
+  } catch {
+    return
+  }
+}
+
+export function loadSize(): 3 | 4 {
+  try {
+    return localStorage.getItem(SIZE_KEY) === '4' ? 4 : 3
+  } catch {
+    return 3
+  }
+}
+
+export function saveSize(size: 3 | 4): void {
+  try {
+    localStorage.setItem(SIZE_KEY, String(size))
   } catch {
     return
   }

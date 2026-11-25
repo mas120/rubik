@@ -460,3 +460,10 @@ code {
   grid-column: 1 / -1;
   text-align: center;
 }
+
+.loading-line {
+  margin: auto;
+  color: #9aa3b5;
+  text-align: center;
+}
+

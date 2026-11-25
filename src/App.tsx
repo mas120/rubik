@@ -2,27 +2,34 @@ import { useState } from 'react'
 import {
   SOLVED,
   applyMoves,
+  getModel,
   isSolved,
   mulberry32,
   randomScramble,
   type Cube,
-  type Move,
 } from './core'
 import { FreePlay } from './screens/FreePlay'
 import { Home } from './screens/Home'
 import { Input } from './screens/Input'
 import { Lesson } from './screens/Lesson'
-import { clearDraft, clearLesson, loadLesson, saveLesson } from './storage'
+import { clearDraft, clearLesson, loadLesson, loadSize, saveLesson, saveSize } from './storage'
 
 type Screen =
   | { name: 'home' }
   | { name: 'free'; persist: boolean; size?: 3 | 4 }
   | { name: 'input'; prefill?: Cube; persist: boolean }
-  | { name: 'lesson'; id: number; cube: Cube; cursor: number; extra: Move[]; persist: boolean }
+  | { name: 'lesson'; id: number; n: 3 | 4; cube: Cube; cursor: number; extra: string[]; persist: boolean }
 
 function scrambledCube(rng: () => number): Cube {
   let cube = SOLVED
   while (isSolved(cube)) cube = applyMoves(SOLVED, randomScramble(25, rng))
+  return cube
+}
+
+function scrambledCube4(rng: () => number): Cube {
+  const model = getModel(4)
+  let cube = model.solved
+  while (model.isSolved(cube)) cube = model.applyAll(model.solved, model.scramble(40, rng))
   return cube
 }
 
@@ -33,10 +40,12 @@ function initialScreen(): Screen {
   const demo = params.get('demo')
   if (demo !== null && Number.isInteger(Number(demo))) {
     const at = Number(params.get('at') ?? 0)
+    const n = params.get('size') === '4' ? 4 : 3
     return {
       name: 'lesson',
       id: lessonId++,
-      cube: scrambledCube(mulberry32(Number(demo))),
+      n,
+      cube: n === 4 ? scrambledCube4(mulberry32(Number(demo))) : scrambledCube(mulberry32(Number(demo))),
       cursor: Number.isFinite(at) ? Math.max(0, Math.floor(at)) : 0,
       extra: [],
       persist: false,
@@ -53,9 +62,16 @@ function App() {
   const [screen, setScreen] = useState<Screen>(initialScreen)
   const [saved, setSaved] = useState(() => (screen.name === 'home' ? loadLesson() : null))
 
-  const startLesson = (cube: Cube, cursor: number, persist: boolean, extra: Move[] = []) => {
-    if (persist) saveLesson(cube, cursor, extra)
-    setScreen({ name: 'lesson', id: lessonId++, cube, cursor, extra, persist })
+  const [size, setSize] = useState<3 | 4>(loadSize)
+
+  const chooseSize = (next: 3 | 4) => {
+    saveSize(next)
+    setSize(next)
+  }
+
+  const startLesson = (n: 3 | 4, cube: Cube, cursor: number, persist: boolean, extra: string[] = []) => {
+    if (persist) saveLesson(n, cube, cursor, extra)
+    setScreen({ name: 'lesson', id: lessonId++, n, cube, cursor, extra, persist })
   }
 
   const goHome = () => {
@@ -69,7 +85,7 @@ function App() {
         persist={screen.persist}
         initialSize={screen.size}
         onHome={goHome}
-        onTeach={(cube) => startLesson(cube, 0, true)}
+        onTeach={(n, cube) => startLesson(n, cube, 0, true)}
       />
     )
   }
@@ -83,7 +99,7 @@ function App() {
         onBack={goHome}
         onStart={(cube) => {
           if (screen.persist && !screen.prefill) clearDraft()
-          startLesson(cube, 0, true)
+          startLesson(3, cube, 0, true)
         }}
       />
     )
@@ -93,6 +109,7 @@ function App() {
     return (
       <Lesson
         key={screen.id}
+        n={screen.n}
         cube={screen.cube}
         initialCursor={screen.cursor}
         initialExtra={screen.extra}
@@ -102,7 +119,7 @@ function App() {
           if (screen.persist) clearLesson()
           goHome()
         }}
-        onRestart={(cube) => startLesson(cube, 0, screen.persist)}
+        onRestart={(cube) => startLesson(screen.n, cube, 0, screen.persist)}
         onReenter={(cube) => setScreen({ name: 'input', prefill: cube, persist: screen.persist })}
       />
     )
@@ -111,9 +128,11 @@ function App() {
   return (
     <Home
       hasSaved={saved !== null}
-      onContinue={() => saved && startLesson(saved.cube, saved.cursor, true, saved.extra)}
+      size={size}
+      onSize={chooseSize}
+      onContinue={() => saved && startLesson(saved.n, saved.cube, saved.cursor, true, saved.extra)}
       onInput={() => setScreen({ name: 'input', persist: true })}
-      onSample={() => startLesson(scrambledCube(Math.random), 0, true)}
+      onSample={() => startLesson(size, size === 4 ? scrambledCube4(Math.random) : scrambledCube(Math.random), 0, true)}
       onFree={() => setScreen({ name: 'free', persist: true })}
     />
   )
