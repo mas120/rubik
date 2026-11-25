@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
+import { CameraScanner } from '../components/CameraScanner'
 import { COLOUR_HEX, COLOUR_NAME } from '../colors'
 import { FACES, getModel, isSolved, validate, validate4, type Cube, type Face } from '../core'
 import { validationMessage } from '../lesson/texts'
 import { FACE_NAME4, INSTRUCTIONS4, validationMessage4 } from '../lesson/texts4'
+import { SCAN_HOLD, SCAN_HOLD4, scanSteps } from '../scan/texts'
 import { loadDraft, loadDraft4, saveDraft, saveDraft4 } from '../storage'
 
 const ORDER: readonly Face[] = ['F', 'R', 'B', 'L', 'U', 'D']
@@ -53,6 +55,7 @@ export function Input({ n, prefill, persist, onBack, onStart }: Props) {
   const [faceIndex, setFaceIndex] = useState(0)
   const [selected, setSelected] = useState<Face>('F')
   const [messages, setMessages] = useState<string[]>([])
+  const [scanning, setScanning] = useState(false)
 
   useEffect(() => {
     if (!persist || prefill) return
@@ -65,6 +68,8 @@ export function Input({ n, prefill, persist, onBack, onStart }: Props) {
   const remaining = (colour: Face) => per - cells.filter((c) => c === colour).length
   const faceFull = cells.slice(base, base + per).every((c) => c !== null)
   const last = faceIndex === ORDER.length - 1
+  const title =
+    n === 3 ? `Mặt ${faceIndex + 1}/6 — tâm ${COLOUR_NAME[face]}` : `Mặt ${faceIndex + 1}/6 — ${FACE_NAME4[face]}`
 
   const paint = (offset: number) => {
     if (n === 3 && offset === 4) return
@@ -76,6 +81,20 @@ export function Input({ n, prefill, persist, onBack, onStart }: Props) {
       else if (per - prev.filter((c) => c === selected).length > 0) next[index] = selected
       return next
     })
+  }
+
+  const applyScan = (colours: Face[]) => {
+    setMessages([])
+    setCells((prev) => {
+      const next = [...prev]
+      colours.forEach((colour, offset) => {
+        if (n === 3 && offset === 4) return
+        next[base + offset] = colour
+      })
+      return next
+    })
+    if (last) setScanning(false)
+    else setFaceIndex(faceIndex + 1)
   }
 
   const jump = (target: Face) => {
@@ -107,12 +126,14 @@ export function Input({ n, prefill, persist, onBack, onStart }: Props) {
   return (
     <main className="screen input">
       <header className="input-head">
-        <h2>
-          {n === 3
-            ? `Mặt ${faceIndex + 1}/6 — tâm ${COLOUR_NAME[face]}`
-            : `Mặt ${faceIndex + 1}/6 — ${FACE_NAME4[face]}`}
-        </h2>
+        <h2>{title}</h2>
         <p>{n === 3 ? INSTRUCTIONS[face] : INSTRUCTIONS4[face]}</p>
+        <div className="scan-row">
+          <button className="btn small primary" onClick={() => setScanning(true)}>
+            Quét bằng camera
+          </button>
+          <span className="scan-hint">Không muốn tô từng ô? Quét lần lượt 6 mặt, app sẽ chỉ cách cầm khối.</span>
+        </div>
       </header>
 
       <div className="input-main">
@@ -192,6 +213,18 @@ export function Input({ n, prefill, persist, onBack, onStart }: Props) {
           </button>
         )}
       </footer>
+
+      {scanning && (
+        <CameraScanner
+          n={n}
+          title={title}
+          steps={scanSteps(n, (n === 3 ? SCAN_HOLD : SCAN_HOLD4)[face])}
+          expected={n === 3 ? face : undefined}
+          last={last}
+          onCapture={applyScan}
+          onClose={() => setScanning(false)}
+        />
+      )}
     </main>
   )
 }

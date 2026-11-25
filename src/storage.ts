@@ -22,6 +22,7 @@ const FREE_KEY = 'rubik.free.v1'
 const FREE4_KEY = 'rubik.free4.v1'
 const FREE_SIZE_KEY = 'rubik.free.size'
 const SIZE_KEY = 'rubik.size'
+const BASICS_KEY = 'rubik.basics.v1'
 
 export interface SavedLesson {
   n: 3 | 4
@@ -241,6 +242,22 @@ export function loadSize(): 3 | 4 {
 export function saveSize(size: 3 | 4): void {
   try {
     localStorage.setItem(SIZE_KEY, String(size))
+  } catch {
+    return
+  }
+}
+
+export function basicsSeen(): boolean {
+  try {
+    return localStorage.getItem(BASICS_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function markBasicsSeen(): void {
+  try {
+    localStorage.setItem(BASICS_KEY, '1')
   } catch {
     return
   }

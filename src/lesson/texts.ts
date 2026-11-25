@@ -178,7 +178,7 @@ export function validationMessage(error: ValidationError): string {
   }
 }
 
-export const DRAG_HINT = 'Bạn có thể tự kéo trên khối để xoay, hoặc bấm Tiếp.'
+export const DRAG_HINT = 'Kéo trên khối theo mũi tên để tự xoay, hoặc bấm Tiếp để app xoay giúp. Bấm Xem lại để xem trước nước này.'
 
 export const offTrackMessage = (n: number) =>
   `Bạn đã xoay khác với hướng dẫn (${n} nước). Hoàn tác để quay lại bài, hoặc giải tiếp từ trạng thái hiện tại.`

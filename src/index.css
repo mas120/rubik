@@ -113,13 +113,16 @@ button {
 }
 
 .input-main {
-  flex: 1;
-  min-height: 0;
+  flex: 1 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 1rem;
+}
+
+.screen.input {
+  overflow-y: auto;
 }
 
 .grid {
@@ -392,13 +395,45 @@ code {
   opacity: 0.4;
 }
 
-.panel-body .move-desc {
-  margin: 0.4rem 0 0;
+.panel-body .move-desc,
+.basics-body .move-desc {
+  margin: 0.1rem 0 0;
   font-size: 1.25rem;
   font-weight: 700;
 }
 
-.panel-body .hint {
+.panel-body .move-count {
+  margin: 0.4rem 0 0;
+  color: #9aa3b5;
+  font-size: 0.8rem;
+}
+
+.panel-body .move-how,
+.basics-body .move-how {
+  margin: 0.2rem 0 0.5rem;
+  font-size: 0.92rem;
+  color: #d5dae5;
+}
+
+.legend {
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+  color: #9aa3b5;
+}
+
+.legend summary {
+  cursor: pointer;
+  color: #8ab4ff;
+}
+
+.legend ul {
+  margin: 0.4rem 0 0;
+  padding-left: 1.1rem;
+  line-height: 1.45;
+}
+
+.panel-body .hint,
+.basics-body .hint {
   color: #9aa3b5;
   font-size: 0.82rem;
 }
@@ -470,4 +505,201 @@ code {
 
 .grid4 {
   width: min(100%, 260px, max(36dvh, 232px));
+}
+
+.scanner {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  overflow-y: auto;
+  gap: 0.75rem;
+  padding: calc(env(safe-area-inset-top) + 0.75rem) calc(env(safe-area-inset-right) + 1rem)
+    calc(env(safe-area-inset-bottom) + 0.75rem) calc(env(safe-area-inset-left) + 1rem);
+  background: #0f1115;
+}
+
+.scanner > p {
+  margin: 0;
+  max-width: 32rem;
+  text-align: center;
+}
+
+.scanner .buttons {
+  width: min(92vw, 32rem);
+}
+
+.scanner-view {
+  position: relative;
+  width: min(92vw, 45vh);
+  flex: none;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #1c212b;
+}
+
+.scanner-view video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.scanner-guide {
+  position: absolute;
+  inset: 15%;
+  display: grid;
+  grid-template-columns: repeat(var(--n), 1fr);
+  grid-template-rows: repeat(var(--n), 1fr);
+}
+
+.scanner-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+}
+
+.scanner-cell .dot {
+  width: 30%;
+  height: 30%;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.6);
+}
+
+.scanner > :first-child {
+  margin-top: auto;
+}
+
+.scanner > :last-child {
+  margin-bottom: auto;
+}
+
+.scanner h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.scanner-view[hidden] {
+  display: none;
+}
+
+.scanner-steps {
+  margin: 0;
+  padding-left: 1.25rem;
+  width: min(92vw, 32rem);
+  color: #9aa3b5;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  text-align: left;
+}
+
+.scanner-tip {
+  color: #9aa3b5;
+  font-size: 0.8rem;
+}
+
+.scanner > .scanner-warning {
+  padding: 0.5rem 0.75rem;
+  border-radius: 10px;
+  background: #3a2e12;
+  color: #ffd98a;
+  font-size: 0.85rem;
+}
+
+.scan-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.scan-row .btn {
+  flex: none;
+  white-space: nowrap;
+}
+
+.scan-hint {
+  color: #9aa3b5;
+  font-size: 0.75rem;
+  line-height: 1.3;
+  text-align: left;
+}
+
+.basics-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  width: min(100%, 40rem);
+  align-self: center;
+  padding: 0.75rem;
+  border-radius: 14px;
+  background: #171b23;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.basics-body h2 {
+  margin: 0 0 0.6rem;
+  font-size: 1.2rem;
+}
+
+.basics-body p {
+  margin: 0 0 0.75rem;
+}
+
+.basics-body ul {
+  margin: 0 0 0.75rem;
+  padding-left: 1.2rem;
+}
+
+.basics-body li {
+  margin-bottom: 0.5rem;
+}
+
+.basics-body .move-desc {
+  margin: 0.5rem 0 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.basics-body .hint {
+  color: #9aa3b5;
+  font-size: 0.85rem;
+}
+
+.basics .topbar,
+.basics .buttons {
+  width: min(100%, 40rem);
+  align-self: center;
+}
+
+.basics-canvas {
+  position: relative;
+  height: min(38dvh, 320px);
+}
+
+.basics-moves {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 0.5rem;
+}
+
+button.chip {
+  min-width: 48px;
+  min-height: 44px;
+  border: 1px solid #343a48;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+button.chip:disabled {
+  opacity: 0.5;
+  cursor: default;
 }

@@ -1,14 +1,16 @@
 interface Props {
   hasSaved: boolean
+  newcomer: boolean
   size: 3 | 4
   onSize(size: 3 | 4): void
   onContinue(): void
   onInput(): void
   onSample(): void
   onFree(): void
+  onBasics(): void
 }
 
-export function Home({ hasSaved, size, onSize, onContinue, onInput, onSample, onFree }: Props) {
+export function Home({ hasSaved, newcomer, size, onSize, onContinue, onInput, onSample, onFree, onBasics }: Props) {
   return (
     <main className="screen home">
       <div className="home-title">
@@ -29,13 +31,16 @@ export function Home({ hasSaved, size, onSize, onContinue, onInput, onSample, on
             </button>
           ))}
         </div>
+        <button className={newcomer ? 'btn primary' : 'btn'} onClick={onBasics}>
+          Hướng dẫn cơ bản cho người mới
+        </button>
         {hasSaved && (
           <button className="btn primary" onClick={onContinue}>
             Tiếp tục bài đang học
           </button>
         )}
-        <button className={hasSaved ? 'btn' : 'btn primary'} onClick={onInput}>
-          Nhập khối của bạn
+        <button className={hasSaved || newcomer ? 'btn' : 'btn primary'} onClick={onInput}>
+          Nhập khối của bạn (tô màu hoặc quét camera)
         </button>
         <button className="btn" onClick={onSample}>
           Thử với khối mẫu

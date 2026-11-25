@@ -11,12 +11,24 @@ import {
 import { FreePlay } from './screens/FreePlay'
 import { Home } from './screens/Home'
 import { Input } from './screens/Input'
+import { Basics } from './screens/Basics'
 import { Lesson } from './screens/Lesson'
-import { clearDraft, clearDraft4, clearLesson, loadLesson, loadSize, saveLesson, saveSize } from './storage'
+import {
+  basicsSeen,
+  clearDraft,
+  clearDraft4,
+  clearLesson,
+  loadLesson,
+  loadSize,
+  markBasicsSeen,
+  saveLesson,
+  saveSize,
+} from './storage'
 
 type Screen =
   | { name: 'home' }
   | { name: 'free'; persist: boolean; size?: 3 | 4 }
+  | { name: 'basics'; n: 3 | 4; next: 'home' | 'input' | 'sample' }
   | { name: 'input'; n: 3 | 4; prefill?: Cube; persist: boolean }
   | { name: 'lesson'; id: number; n: 3 | 4; cube: Cube; cursor: number; extra: string[]; persist: boolean }
 
@@ -54,6 +66,9 @@ function initialScreen(): Screen {
   if (params.get('screen') === 'free') {
     return { name: 'free', persist: false, size: params.get('size') === '4' ? 4 : 3 }
   }
+  if (params.get('screen') === 'basics') {
+    return { name: 'basics', n: params.get('size') === '4' ? 4 : 3, next: 'home' }
+  }
   if (params.get('screen') === 'input') {
     return { name: 'input', n: params.get('size') === '4' ? 4 : 3, persist: false }
   }
@@ -79,6 +94,29 @@ function App() {
   const goHome = () => {
     setSaved(loadLesson())
     setScreen({ name: 'home' })
+  }
+
+  const openBasics = (next: 'home' | 'input' | 'sample') => setScreen({ name: 'basics', n: size, next })
+
+  const startSample = (n: 3 | 4) =>
+    startLesson(n, n === 4 ? scrambledCube4(Math.random) : scrambledCube(Math.random), 0, true)
+
+  if (screen.name === 'basics') {
+    const leave = () => {
+      markBasicsSeen()
+      if (screen.next === 'input') setScreen({ name: 'input', n: screen.n, persist: true })
+      else if (screen.next === 'sample') startSample(screen.n)
+      else goHome()
+    }
+    return (
+      <Basics
+        key={screen.n}
+        n={screen.n}
+        finishLabel={screen.next === 'home' ? 'Về trang đầu' : 'Bắt đầu'}
+        onFinish={leave}
+        onSkip={leave}
+      />
+    )
   }
 
   if (screen.name === 'free') {
@@ -134,12 +172,14 @@ function App() {
   return (
     <Home
       hasSaved={saved !== null}
+      newcomer={saved === null && !basicsSeen()}
       size={size}
       onSize={chooseSize}
       onContinue={() => saved && startLesson(saved.n, saved.cube, saved.cursor, true, saved.extra)}
-      onInput={() => setScreen({ name: 'input', n: size, persist: true })}
-      onSample={() => startLesson(size, size === 4 ? scrambledCube4(Math.random) : scrambledCube(Math.random), 0, true)}
+      onInput={() => (basicsSeen() ? setScreen({ name: 'input', n: size, persist: true }) : openBasics('input'))}
+      onSample={() => (basicsSeen() ? startSample(size) : openBasics('sample'))}
       onFree={() => setScreen({ name: 'free', persist: true })}
+      onBasics={() => openBasics('home')}
     />
   )
 }

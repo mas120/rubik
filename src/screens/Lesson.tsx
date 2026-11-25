@@ -11,6 +11,7 @@ import {
   fullStageKeys,
   type LessonPlan,
 } from '../lesson/plan'
+import { HIGHLIGHT_HINT, PHASE_LABEL, moveInstruction, notationLegend } from '../lesson/guide'
 import { applyUserMove, assistMove, remainingMoves } from '../lesson/track'
 import { DRAG_HINT, SETUP_HINT, offTrackMessage } from '../lesson/texts'
 import { saveLesson } from '../storage'
@@ -230,6 +231,25 @@ function LessonBody({
   const stageNumber = stageKey ? stageKeys.indexOf(stageKey) + 1 : stageKeys.length
   const title = item.type === 'done' ? 'Hoàn thành' : (stageInfo?.title ?? '')
 
+  const legend = (
+    <details className="legend">
+      <summary>Giải thích ký hiệu và từ ngữ</summary>
+      <ul>
+        {notationLegend(n).map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+    </details>
+  )
+
+  const shown = item.type === 'move' ? (remaining ? remaining[0] : item.move) : null
+  const total = step ? step.setup.length + step.alg.length + step.cleanup.length : 0
+  const done =
+    item.type === 'move' && step
+      ? item.indexInPhase +
+        (item.phase === 'setup' ? 0 : item.phase === 'alg' ? step.setup.length : step.setup.length + step.alg.length)
+      : 0
+
   const phaseRank = { setup: 0, alg: 1, cleanup: 2 } as const
   const chipClass = (phase: 'setup' | 'alg' | 'cleanup', index: number) => {
     if (item.type !== 'move') return 'chip'
@@ -293,6 +313,7 @@ function LessonBody({
                   ))}
                 </ul>
               )}
+              {legend}
             </>
           )}
           {item.type === 'move' && step && offTrack && (
@@ -301,12 +322,13 @@ function LessonBody({
           {item.type === 'move' && step && !offTrack && (
             <>
               <p className="explain">{step.explain}</p>
+              {highlight && <p className="hint">{HIGHLIGHT_HINT}</p>}
               {item.phase === 'setup' && <p className="hint">{SETUP_HINT}</p>}
               {step.setup.length > 0 && (
                 <div className="chip-row">
-                  <span className="chip-label">Chuẩn bị</span>
+                  <span className="chip-label">{PHASE_LABEL.setup}</span>
                   {step.setup.map((m, i) => (
-                    <span key={i} className={chipClass('setup', i)}>
+                    <span key={i} className={chipClass('setup', i)} title={describeMove(n, m)}>
                       {m}
                     </span>
                   ))}
@@ -314,9 +336,9 @@ function LessonBody({
               )}
               {step.alg.length > 0 && (
                 <div className="chip-row">
-                  <span className="chip-label">{step.algLabel ?? 'Thực hiện'}</span>
+                  <span className="chip-label">{`${step.algLabel ?? 'Thực hiện'} — ${PHASE_LABEL.alg}`}</span>
                   {step.alg.map((m, i) => (
-                    <span key={i} className={chipClass('alg', i)}>
+                    <span key={i} className={chipClass('alg', i)} title={describeMove(n, m)}>
                       {m}
                     </span>
                   ))}
@@ -324,18 +346,23 @@ function LessonBody({
               )}
               {step.cleanup.length > 0 && (
                 <div className="chip-row">
-                  <span className="chip-label">Trả lại</span>
+                  <span className="chip-label">{PHASE_LABEL.cleanup}</span>
                   {step.cleanup.map((m, i) => (
-                    <span key={i} className={chipClass('cleanup', i)}>
+                    <span key={i} className={chipClass('cleanup', i)} title={describeMove(n, m)}>
                       {m}
                     </span>
                   ))}
                 </div>
               )}
+              <p className="move-count">
+                Nước {done + 1}/{total} của bước này — ký hiệu <code>{shown}</code>
+              </p>
               <p className="move-desc">
                 {remaining ? `Xoay tiếp: ${describeMove(n, remaining[0])}` : describeMove(n, item.move)}
               </p>
+              {shown && <p className="move-how">{moveInstruction(shown)}</p>}
               {item.stepIndex === 0 && <p className="hint">{DRAG_HINT}</p>}
+              {legend}
             </>
           )}
           {item.type === 'done' && (
