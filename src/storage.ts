@@ -108,11 +108,8 @@ export function loadFree(): SavedFree | null {
     const data = JSON.parse(raw) as { cube: string; history: string[] }
     const cube = cubeFromString(data.cube)
     const history = parseMoves(data.history.join(' '))
-    if (history.some((m) => m[0] === 'y')) throw new Error('invalid')
-    const normalised = normalize(cube)
-    if (!normalised || normalised.some((s, i) => s !== cube[i]) || validate(cube).length > 0) {
-      throw new Error('invalid')
-    }
+    if (history.some((m) => /^[xyz]/.test(m))) throw new Error('invalid')
+    if (validate(cube).length > 0) throw new Error('invalid')
     if (applyMoves(SOLVED, history).some((s, i) => s !== cube[i])) throw new Error('invalid')
     return { cube, history }
   } catch {

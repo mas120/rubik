@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MOVES, STICKER_GEOMETRY, applyMove, type Cube, type Face, type Vec } from '../core'
+import { MOVES, STICKER_GEOMETRY, applyMove, inLayer, type Cube, type Face, type Vec } from '../core'
 import { moveRotation } from './moveRotation'
 
 function rotate(v: Vec, axis: Vec, angle: number): Vec {
@@ -19,11 +19,11 @@ const INDEX = new Map(STICKER_GEOMETRY.map((g, i) => [key(g.pos, g.normal), i]))
 
 describe('moveRotation', () => {
   it.each(MOVES)('matches the logical permutation for %s', (move) => {
-    const { axis, angle, whole } = moveRotation(move)
+    const { axis, angle, layer } = moveRotation(move)
     const idCube = Array.from({ length: 54 }, (_, i) => i) as unknown as Cube
     const result = applyMove(idCube, move) as unknown as number[]
     STICKER_GEOMETRY.forEach(({ pos, normal }, i) => {
-      const moving = whole || pos[0] * axis[0] + pos[1] * axis[1] + pos[2] * axis[2] === 1
+      const moving = inLayer(pos, axis, layer)
       if (!moving) {
         expect(result[i]).toBe(i)
         return
@@ -37,8 +37,10 @@ describe('moveRotation', () => {
     expect(moveRotation('U').angle).toBeCloseTo(-Math.PI / 2)
     expect(moveRotation("R'").angle).toBeCloseTo(Math.PI / 2)
     expect(moveRotation('y2').angle).toBeCloseTo(-Math.PI)
-    expect(moveRotation('y').whole).toBe(true)
-    expect(moveRotation('F').whole).toBe(false)
+    expect(moveRotation('y').layer).toBe('whole')
+    expect(moveRotation('F').layer).toBe('outer')
+    expect(moveRotation('M').layer).toBe('middle')
+    expect(moveRotation('x').layer).toBe('whole')
   })
 
   it('has the face as axis', () => {

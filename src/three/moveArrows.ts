@@ -26,10 +26,10 @@ const UNIT_VECTORS: Vec[] = [
 ]
 
 export function moveArrows(move: Move): MoveArrow[] {
-  const { axis, angle, whole } = moveRotation(move)
+  const { axis, angle, layer } = moveRotation(move)
   const sign = Math.sign(angle)
   const double = move.endsWith('2')
-  const heights = whole ? [-1, 0, 1] : [1]
+  const heights = layer === 'whole' ? [-1, 0, 1] : layer === 'middle' ? [0] : [1]
   const sides = UNIT_VECTORS.filter((m) => m[0] * axis[0] + m[1] * axis[1] + m[2] * axis[2] === 0)
   return heights.flatMap((h) =>
     sides.map((m) => {

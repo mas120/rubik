@@ -12,9 +12,9 @@ const cross = (a: Vec, b: Vec): Vec => [
 
 describe('moveArrows', () => {
   it.each(MOVES)('describes real motion for %s', (move) => {
-    const { axis, angle, whole } = moveRotation(move)
+    const { axis, angle, layer } = moveRotation(move)
     const arrows = moveArrows(move)
-    expect(arrows).toHaveLength(whole ? 12 : 4)
+    expect(arrows).toHaveLength(layer === 'whole' ? 12 : 4)
     for (const arrow of arrows) {
       expect(arrow.double).toBe(move.endsWith('2'))
       expect(arrow.dir.reduce((s, v) => s + Math.abs(v), 0)).toBe(1)

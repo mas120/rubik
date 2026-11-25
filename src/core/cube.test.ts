@@ -17,7 +17,7 @@ import {
   type Move,
 } from './cube'
 
-const FACE_MOVES = MOVES.filter((m) => !m.startsWith('y'))
+const FACE_MOVES = MOVES.filter((m) => /^[URFDLB]/.test(m))
 
 function faceStrings(cube: Cube): string {
   return FACES.map((f, i) => `${f}=${cube.slice(i * 9, i * 9 + 9).join('')}`).join(' ')
@@ -34,12 +34,17 @@ describe('move tables', () => {
     ['F', 'U=UUUUUULLL R=URRURRURR F=FFFFFFFFF D=RRRDDDDDD L=LLDLLDLLD B=BBBBBBBBB'],
     ['D', 'U=UUUUUUUUU R=RRRRRRFFF F=FFFFFFLLL D=DDDDDDDDD L=LLLLLLBBB B=BBBBBBRRR'],
     ['y', 'U=UUUUUUUUU R=BBBBBBBBB F=RRRRRRRRR D=DDDDDDDDD L=FFFFFFFFF B=LLLLLLLLL'],
+    ['M', 'U=UBUUBUUBU R=RRRRRRRRR F=FUFFUFFUF D=DFDDFDDFD L=LLLLLLLLL B=BDBBDBBDB'],
+    ['E', 'U=UUUUUUUUU R=RRRFFFRRR F=FFFLLLFFF D=DDDDDDDDD L=LLLBBBLLL B=BBBRRRBBB'],
+    ['S', 'U=UUULLLUUU R=RURRURRUR F=FFFFFFFFF D=DDDRRRDDD L=LDLLDLLDL B=BBBBBBBBB'],
+    ['x', 'U=FFFFFFFFF R=RRRRRRRRR F=DDDDDDDDD D=BBBBBBBBB L=LLLLLLLLL B=UUUUUUUUU'],
+    ['z', 'U=LLLLLLLLL R=UUUUUUUUU F=FFFFFFFFF D=RRRRRRRRR L=DDDDDDDDD B=BBBBBBBBB'],
   ] as const)('%s on SOLVED', (move, expected) => {
     expect(faceStrings(applyMove(SOLVED, move))).toBe(expected)
   })
 
-  it('has 21 moves', () => {
-    expect(MOVES).toHaveLength(21)
+  it('has 36 moves', () => {
+    expect(MOVES).toHaveLength(36)
   })
 
   it.each(MOVES)('%s has the right order', (move) => {
@@ -84,6 +89,13 @@ describe('move tables', () => {
     }
   })
 
+  it('whole rotations decompose into face and slice turns', () => {
+    const cube = scrambled(13)
+    expect(applyMove(cube, 'x')).toEqual(applyMoves(cube, ['R', "M'", "L'"]))
+    expect(applyMove(cube, 'y')).toEqual(applyMoves(cube, ['U', "E'", "D'"]))
+    expect(applyMove(cube, 'z')).toEqual(applyMoves(cube, ['F', 'S', "B'"]))
+  })
+
   it('y commutes with U', () => {
     const cube = scrambled(3)
     expect(applyMoves(cube, ['y', 'U'])).toEqual(applyMoves(cube, ['U', 'y']))
@@ -97,7 +109,7 @@ describe('helpers', () => {
   })
 
   it('rejects unknown moves', () => {
-    expect(() => parseMoves('R M')).toThrow()
+    expect(() => parseMoves('R Q')).toThrow()
   })
 
   it('round-trips strings', () => {

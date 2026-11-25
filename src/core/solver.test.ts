@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   FACES,
+  MOVES,
   SOLVED,
   applyMove,
   applyMoves,
@@ -9,6 +10,7 @@ import {
   randomScramble,
   toHomeOrientation,
   type Cube,
+  type Move,
 } from './cube'
 import { ALGS, locatePiece, solve, stageDone, type Solution, type StageId, type Step } from './solver'
 
@@ -135,6 +137,42 @@ describe('solve', () => {
         expect(rotation.every((m) => m.startsWith('y'))).toBe(true)
         expect([4, 13, 22, 31, 40, 49].map((i) => home[i]).join('')).toBe('URFDLB')
       }
+    }
+  })
+
+  it('finds a short rotation for all 24 orientations', () => {
+    const base = samples[3].cube
+    const rotations: Move[] = ['x', "x'", 'x2', 'y', "y'", 'y2', 'z', "z'", 'z2']
+    const orientations = new Map<string, Cube>()
+    let frontier: Cube[] = [base]
+    for (let depth = 0; depth < 4; depth++) {
+      frontier = frontier.flatMap((c) => rotations.map((m) => applyMove(c, m)))
+      for (const c of frontier) orientations.set([4, 13, 22, 31, 40, 49].map((i) => c[i]).join(''), c)
+    }
+    orientations.set('URFDLB', base)
+    expect(orientations.size).toBe(24)
+    let longest = 0
+    for (const rotated of orientations.values()) {
+      const result = toHomeOrientation(rotated)
+      expect(result.cube).toEqual(base)
+      longest = Math.max(longest, result.rotation.length)
+    }
+    expect(longest).toBeLessThanOrEqual(2)
+  })
+
+  it('rejects duplicate centres in toHomeOrientation', () => {
+    const cube = [...SOLVED]
+    cube[13] = 'U'
+    expect(() => toHomeOrientation(cube)).toThrow()
+  })
+
+  it('solves any cube reached with slices and rotations after reorienting', () => {
+    const rng = mulberry32(777)
+    for (let i = 0; i < 200; i++) {
+      const moves = Array.from({ length: 30 }, () => MOVES[Math.floor(rng() * MOVES.length)])
+      const cube = applyMoves(SOLVED, moves)
+      const home = toHomeOrientation(cube).cube
+      expect(isSolved(applyMoves(home, solve(home).moves))).toBe(true)
     }
   })
 

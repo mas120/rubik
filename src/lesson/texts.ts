@@ -144,6 +144,21 @@ export const MOVE_DESC: Record<Move, string> = {
   y: 'Xoay cả khối — mặt bên phải quay về phía bạn',
   "y'": 'Xoay cả khối — mặt bên trái quay về phía bạn',
   y2: 'Xoay cả khối — nửa vòng',
+  M: 'Lớp giữa dọc — kéo xuống',
+  "M'": 'Lớp giữa dọc — đẩy lên',
+  M2: 'Lớp giữa dọc — nửa vòng',
+  E: 'Lớp giữa ngang — xoay sang phải',
+  "E'": 'Lớp giữa ngang — xoay sang trái',
+  E2: 'Lớp giữa ngang — nửa vòng',
+  S: 'Lớp giữa đứng — theo chiều kim đồng hồ',
+  "S'": 'Lớp giữa đứng — ngược chiều kim đồng hồ',
+  S2: 'Lớp giữa đứng — nửa vòng',
+  x: 'Xoay cả khối — lật ra phía sau',
+  "x'": 'Xoay cả khối — lật về phía bạn',
+  x2: 'Xoay cả khối — lật nửa vòng',
+  z: 'Xoay cả khối — nghiêng sang phải',
+  "z'": 'Xoay cả khối — nghiêng sang trái',
+  z2: 'Xoay cả khối — nghiêng nửa vòng',
 }
 
 export function validationMessage(error: ValidationError): string {

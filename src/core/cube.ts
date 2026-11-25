@@ -3,8 +3,10 @@ export type Cube = readonly Face[]
 
 type Turn = '' | "'" | '2'
 export type FaceMove = `${Face}${Turn}`
-export type RotationMove = 'y' | "y'" | 'y2'
-export type Move = FaceMove | RotationMove
+export type SliceMove = `${'M' | 'E' | 'S'}${Turn}`
+export type RotationMove = `${'x' | 'y' | 'z'}${Turn}`
+export type Move = FaceMove | SliceMove | RotationMove
+export type Layer = 'outer' | 'middle' | 'whole'
 
 export const FACES: readonly Face[] = ['U', 'R', 'F', 'D', 'L', 'B']
 
@@ -106,10 +108,14 @@ function clockwise(v: Vec, axis: Vec): Vec {
 export const STICKER_GEOMETRY: readonly { pos: Vec; normal: Vec }[] = Array.from({ length: 54 }, (_, i) => stickerGeometry(i))
 const KEY_TO_INDEX = new Map(STICKER_GEOMETRY.map((g, i) => [`${g.pos}|${g.normal}`, i]))
 
-function quarterTurnTable(axis: Vec, wholeCube: boolean): number[] {
+export function inLayer(pos: Vec, axis: Vec, layer: Layer): boolean {
+  return layer === 'whole' || dot(pos, axis) === (layer === 'outer' ? 1 : 0)
+}
+
+function quarterTurnTable(axis: Vec, layer: Layer): number[] {
   const table = Array.from({ length: 54 }, (_, i) => i)
   STICKER_GEOMETRY.forEach(({ pos, normal }, i) => {
-    if (!wholeCube && dot(pos, axis) !== 1) return
+    if (!inLayer(pos, axis, layer)) return
     const target = KEY_TO_INDEX.get(`${clockwise(pos, axis)}|${clockwise(normal, axis)}`)!
     table[target] = i
   })
@@ -130,16 +136,20 @@ const TURN_SUFFIXES: readonly [Turn, number][] = [
 
 const TABLES = new Map<Move, number[]>()
 
-for (const face of FACES) {
-  const base = quarterTurnTable(FACE_NORMALS[face], false)
+export const MOVE_SPECS: readonly { name: string; axis: Vec; layer: Layer }[] = [
+  ...FACES.map((f) => ({ name: f, axis: FACE_NORMALS[f], layer: 'outer' as const })),
+  { name: 'M', axis: FACE_NORMALS.L, layer: 'middle' },
+  { name: 'E', axis: FACE_NORMALS.D, layer: 'middle' },
+  { name: 'S', axis: FACE_NORMALS.F, layer: 'middle' },
+  { name: 'x', axis: FACE_NORMALS.R, layer: 'whole' },
+  { name: 'y', axis: FACE_NORMALS.U, layer: 'whole' },
+  { name: 'z', axis: FACE_NORMALS.F, layer: 'whole' },
+]
+
+for (const { name, axis, layer } of MOVE_SPECS) {
+  const base = quarterTurnTable(axis, layer)
   for (const [suffix, times] of TURN_SUFFIXES) {
-    TABLES.set(`${face}${suffix}`, composePower(base, times))
-  }
-}
-{
-  const base = quarterTurnTable(FACE_NORMALS.U, true)
-  for (const [suffix, times] of TURN_SUFFIXES) {
-    TABLES.set(`y${suffix}` as RotationMove, composePower(base, times))
+    TABLES.set(`${name}${suffix}` as Move, composePower(base, times))
   }
 }
 
@@ -190,13 +200,25 @@ export function cubeFromString(text: string): Cube {
   })
 }
 
+const ROTATION_MOVES: readonly Move[] = ['x', "x'", 'x2', 'y', "y'", 'y2', 'z', "z'", 'z2']
+
+function centresHome(cube: Cube): boolean {
+  return FACES.every((f, i) => cube[i * 9 + 4] === f)
+}
+
 export function toHomeOrientation(cube: Cube): { cube: Cube; rotation: Move[] } {
-  const rotations: Move[][] = [[], ['y'], ['y2'], ["y'"]]
-  for (const rotation of rotations) {
-    const rotated = applyMoves(cube, rotation)
-    if (rotated[22] === 'F') return { cube: rotated, rotation }
+  if (new Set(FACES.map((_, i) => cube[i * 9 + 4])).size !== 6) {
+    throw new Error('Centres must be six distinct colours')
   }
-  return { cube, rotation: [] }
+  let frontier: { cube: Cube; rotation: Move[] }[] = [{ cube, rotation: [] }]
+  for (let depth = 0; depth <= 3; depth++) {
+    const hit = frontier.find((s) => centresHome(s.cube))
+    if (hit) return hit
+    frontier = frontier.flatMap((s) =>
+      ROTATION_MOVES.map((m) => ({ cube: applyMove(s.cube, m), rotation: [...s.rotation, m] })),
+    )
+  }
+  throw new Error('Centres are not a rotation of the home orientation')
 }
 
 export function isSolved(cube: Cube): boolean {

@@ -18,7 +18,7 @@ import {
 } from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { BODY_HEX, COLOUR_HEX } from '../colors'
-import { STICKER_GEOMETRY, type Cube, type Move, type Vec } from '../core'
+import { STICKER_GEOMETRY, inLayer, type Cube, type Move, type Vec } from '../core'
 import { dragToMove } from './dragToMove'
 import { moveArrows } from './moveArrows'
 import { moveRotation } from './moveRotation'
@@ -261,7 +261,9 @@ export class CubeView {
     for (const axis of axes) {
       if (axis[0] * normal[0] + axis[1] * normal[1] + axis[2] * normal[2] !== 0) continue
       for (const sign of [1, -1] as const) {
-        const motion = new Vector3(...axis).cross(point).multiplyScalar(0.2 * sign)
+        const motion = new Vector3(...axis).cross(point)
+        const facing = new Vector3(...normal)
+        motion.addScaledVector(facing, -motion.dot(facing)).multiplyScalar(0.2 * sign)
         const delta = toScreen(point.clone().add(motion)).sub(origin)
         const score = (delta.x * dx + delta.y * dy) / ((delta.length() || 1) * length)
         if (!best || score > best.score) best = { score, axis, sign }
@@ -339,10 +341,10 @@ export class CubeView {
     if (this.arrowGroup) this.arrowGroup.visible = false
     this.resetTransforms()
     this.setState(before, this.highlight)
-    const { axis, angle, whole } = moveRotation(move)
+    const { axis, angle, layer } = moveRotation(move)
     const axisVector = new Vector3(...axis)
     for (const { group, pos } of this.cubies) {
-      if (whole || pos[0] * axis[0] + pos[1] * axis[1] + pos[2] * axis[2] === 1) this.pivot.add(group)
+      if (inLayer(pos, axis, layer)) this.pivot.add(group)
     }
     return new Promise((resolve) => {
       const start = performance.now()
