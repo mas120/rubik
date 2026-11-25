@@ -3,9 +3,11 @@ import {
   Color,
   DoubleSide,
   Group,
+  Float32BufferAttribute,
   Matrix4,
   Mesh,
   MeshBasicMaterial,
+  Path,
   PerspectiveCamera,
   Quaternion,
   Raycaster,
@@ -27,31 +29,115 @@ const BASE_FOV = 34
 
 const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2)
 
-const ARROW_COLOUR = '#19e3ff'
+const ARROW_STYLE = {
+  colour: '#19e3ff',
+  rimColour: '#0b0d12',
+  rimOpacity: 0.7,
+  rim: 0.022,
+  length: 0.62,
+  tailHalf: 0.035,
+  shaftHalf: 0.085,
+  headLength: 0.3,
+  headWidth: 0.36,
+  notch: 0.08,
+  secondHead: 0.26,
+  tailAlpha: 0.25,
+  headAlpha: 1,
+  tailSegments: 8,
+  rimLift: 0.02,
+  fillLift: 0.03,
+}
 
-function arrowShapes(double: boolean, grow: number, scale: number): Shape[] {
-  const half = (0.14 + grow) * scale
-  const tip = 1.15 + grow * 1.8
-  const headLength = 0.6 * scale
-  const headHalf = (0.3 + grow) * scale
-  const heads = double ? [tip, tip - 0.45] : [tip]
-  const last = heads[heads.length - 1]
-  const shaft = new Shape()
-  shaft.moveTo(-1.15 - grow, -half)
-  shaft.lineTo(last - headLength + 0.1, -half)
-  shaft.lineTo(last - headLength + 0.1, half)
-  shaft.lineTo(-1.15 - grow, half)
-  shaft.closePath()
-  const shapes = [shaft]
-  for (const x of heads) {
-    const head = new Shape()
-    head.moveTo(x - headLength, -headHalf)
-    head.lineTo(x, 0)
-    head.lineTo(x - headLength, headHalf)
-    head.closePath()
-    shapes.push(head)
+type Point = [number, number]
+
+function arrowPolygons(double: boolean, size: number, faceWidth: number): Point[][] {
+  const st = ARROW_STYLE
+  const total = st.length * faceWidth
+  const tail = -total / 2
+  const tip = total / 2
+  const w0 = st.tailHalf * size
+  const w1 = st.shaftHalf * size
+  const hl = st.headLength * size
+  const hw = (st.headWidth * size) / 2
+  const notch = st.notch * size
+  const x0 = tail + w0
+  const tipOf = (second: boolean) => (second ? tip - st.secondHead * size : tip)
+  const polygons: Point[][] = []
+  const lead = tipOf(double)
+  const base = lead - hl
+  const junction = base + notch
+  const body: Point[] = [
+    [x0, -w0],
+    [junction, -w1],
+    [base, -hw],
+    [lead, 0],
+    [base, hw],
+    [junction, w1],
+    [x0, w0],
+  ]
+  for (let i = 1; i < st.tailSegments; i++) {
+    const angle = Math.PI / 2 + (Math.PI * i) / st.tailSegments
+    body.push([x0 + Math.cos(angle) * w0, Math.sin(angle) * w0])
   }
-  return shapes
+  polygons.push(body)
+  if (double) {
+    const frontBase = tip - hl
+    const frontJunction = frontBase + notch
+    polygons.push([
+      [frontBase, -hw],
+      [tip, 0],
+      [frontBase, hw],
+      [frontJunction, w1],
+      [frontJunction, -w1],
+    ])
+  }
+  return polygons
+}
+
+function offsetPolygon(points: Point[], distance: number): Point[] {
+  const count = points.length
+  return points.map((point, i) => {
+    const prev = points[(i + count - 1) % count]
+    const next = points[(i + 1) % count]
+    const edge = (from: Point, to: Point): Point => {
+      const dx = to[0] - from[0]
+      const dy = to[1] - from[1]
+      const length = Math.hypot(dx, dy) || 1
+      return [dy / length, -dx / length]
+    }
+    const n1 = edge(prev, point)
+    const n2 = edge(point, next)
+    const denominator = Math.max(1 + n1[0] * n2[0] + n1[1] * n2[1], 0.25)
+    return [point[0] + ((n1[0] + n2[0]) / denominator) * distance, point[1] + ((n1[1] + n2[1]) / denominator) * distance]
+  })
+}
+
+function toShape(points: Point[], hole?: Point[]): Shape {
+  const shape = new Shape(points.map(([x, y]) => new Vector2(x, y)))
+  if (hole) shape.holes.push(new Path(hole.map(([x, y]) => new Vector2(x, y))))
+  return shape
+}
+
+function arrowGeometries(double: boolean, size: number, faceWidth: number): { fill: ShapeGeometry; rim: ShapeGeometry } {
+  const st = ARROW_STYLE
+  const polygons = arrowPolygons(double, size, faceWidth)
+  const fill = new ShapeGeometry(polygons.map((polygon) => toShape(polygon)))
+  const rim = new ShapeGeometry(
+    polygons.map((polygon) => toShape(offsetPolygon(polygon, st.rim * size), polygon)),
+  )
+  const total = st.length * faceWidth
+  const position = fill.getAttribute('position')
+  const colour = new Color(st.colour)
+  const values = new Float32Array(position.count * 4)
+  for (let i = 0; i < position.count; i++) {
+    const t = Math.min(1, Math.max(0, (position.getX(i) + total / 2) / total))
+    values[i * 4] = colour.r
+    values[i * 4 + 1] = colour.g
+    values[i * 4 + 2] = colour.b
+    values[i * 4 + 3] = st.tailAlpha + (st.headAlpha - st.tailAlpha) * t
+  }
+  fill.setAttribute('color', new Float32BufferAttribute(values, 4))
+  return { fill, rim }
 }
 
 function stickerShape(size: number, radius: number): Shape {
@@ -312,22 +398,45 @@ export class CubeView {
         const dir = new Vector3(...arrow.dir)
         const side = new Vector3().crossVectors(normal, dir)
         const basis = new Matrix4().makeBasis(dir, side, normal)
-        const layers: [number, number, string][] = [
-          [0.04 * size, 0.02 * size, '#000000'],
-          [0, 0.03 * size, ARROW_COLOUR],
+        const { fill, rim } = arrowGeometries(arrow.double, size, 3)
+        const layers = [
+          {
+            geometry: rim,
+            lift: ARROW_STYLE.rimLift,
+            order: 1,
+            material: new MeshBasicMaterial({
+              color: ARROW_STYLE.rimColour,
+              opacity: ARROW_STYLE.rimOpacity,
+              transparent: true,
+              depthWrite: false,
+              side: DoubleSide,
+              polygonOffset: true,
+              polygonOffsetFactor: -2.2,
+              polygonOffsetUnits: -2,
+            }),
+          },
+          {
+            geometry: fill,
+            lift: ARROW_STYLE.fillLift,
+            order: 2,
+            material: new MeshBasicMaterial({
+              color: '#ffffff',
+              vertexColors: true,
+              transparent: true,
+              depthWrite: false,
+              side: DoubleSide,
+              polygonOffset: true,
+              polygonOffsetFactor: -2.4,
+              polygonOffsetUnits: -2,
+            }),
+          },
         ]
-        for (const [grow, lift, colour] of layers) {
-          const material = new MeshBasicMaterial({
-            color: colour,
-            side: DoubleSide,
-            polygonOffset: true,
-            polygonOffsetFactor: -2 - (lift / size) * 10,
-            polygonOffsetUnits: -2,
-          })
-          const mesh = new Mesh(new ShapeGeometry(arrowShapes(arrow.double, grow / size, size)), material)
+        for (const { geometry, lift, order, material } of layers) {
+          const mesh = new Mesh(geometry, material)
+          mesh.renderOrder = order
           mesh.matrixAutoUpdate = false
           mesh.matrix.copy(basis)
-          const offset = lift - 0.018 * size
+          const offset = lift * size - 0.018 * size
           mesh.matrix.setPosition(
             arrow.center[0] + normal.x * offset,
             arrow.center[1] + normal.y * offset,

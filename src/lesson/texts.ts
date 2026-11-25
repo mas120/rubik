@@ -180,8 +180,6 @@ export function validationMessage(error: ValidationError): string {
 
 export const DRAG_HINT = 'Bạn có thể tự kéo trên khối để xoay, hoặc bấm Tiếp.'
 
-export const HALF_TURN_MESSAGE = 'Nước này là nửa vòng — xoay thêm một lần nữa cùng chiều.'
-
 export const offTrackMessage = (n: number) =>
   `Bạn đã xoay khác với hướng dẫn (${n} nước). Hoàn tác để quay lại bài, hoặc giải tiếp từ trạng thái hiện tại.`
 

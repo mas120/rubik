@@ -11,8 +11,8 @@ import {
   fullStageKeys,
   type LessonPlan,
 } from '../lesson/plan'
-import { applyUserMove, isHalfTurnPartial } from '../lesson/track'
-import { DRAG_HINT, HALF_TURN_MESSAGE, SETUP_HINT, offTrackMessage } from '../lesson/texts'
+import { applyUserMove, assistMove, remainingMoves } from '../lesson/track'
+import { DRAG_HINT, SETUP_HINT, offTrackMessage } from '../lesson/texts'
 import { saveLesson } from '../storage'
 
 const MOVE_MS = 350
@@ -93,8 +93,13 @@ function LessonBody({
     return focus.length > 0 ? focus : null
   }, [plan, items, cursor])
 
-  const offTrack = extra.length > 0
   const displayed = useMemo(() => model.applyAll(current, extra), [model, current, extra])
+  const remaining = useMemo(() => {
+    if (extra.length === 0 || item.type !== 'move') return null
+    return remainingMoves(model, displayed, cubeAt(plan, items, cursor + 1), item.move)
+  }, [model, displayed, plan, items, cursor, item, extra])
+  const partial = extra.length > 0 && remaining !== null
+  const offTrack = extra.length > 0 && remaining === null
   const handleUserMove = useRef<(move: string) => void>(() => undefined)
 
   useEffect(() => {
@@ -102,8 +107,10 @@ function LessonBody({
   }, [displayed, highlight, offTrack])
 
   useEffect(() => {
-    canvas.current?.setArrows(item.type === 'move' && !busy && !offTrack ? item.move : null)
-  }, [item, busy, offTrack])
+    canvas.current?.setArrows(
+      item.type === 'move' && !busy && !offTrack ? (remaining ? remaining[0] : item.move) : null,
+    )
+  }, [item, busy, offTrack, remaining])
 
   useEffect(() => {
     const handle = canvas.current
@@ -175,8 +182,9 @@ function LessonBody({
       setCursor(cursor - 1)
     })
 
-  const onUserMove = (move: string) => {
+  const onUserMove = (dragged: string, assist = true) => {
     if (busyRef.current || item.type !== 'move') return
+    const move = assist ? assistMove(model, item.move, dragged) : dragged
     const nextCube = cubeAt(plan, items, cursor + 1)
     const result = applyUserMove(model, current, nextCube, extra, move)
     void run(async () => {
@@ -187,7 +195,7 @@ function LessonBody({
   }
 
   useEffect(() => {
-    handleUserMove.current = onUserMove
+    handleUserMove.current = (move) => onUserMove(move)
   })
 
   const undoExtra = () =>
@@ -198,6 +206,10 @@ function LessonBody({
       await canvas.current?.animateMove(inverse, displayed, model.apply(displayed, inverse), DRAG_MS)
       setExtra(extra.slice(0, -1))
     })
+
+  const performRemaining = () => {
+    if (remaining) onUserMove(remaining[0], false)
+  }
 
   const continueFromHere = () => {
     if (model.isSolved(displayed)) onFinish()
@@ -284,9 +296,7 @@ function LessonBody({
             </>
           )}
           {item.type === 'move' && step && offTrack && (
-            <p className="explain">
-              {isHalfTurnPartial(item.move, extra) ? HALF_TURN_MESSAGE : offTrackMessage(extra.length)}
-            </p>
+            <p className="explain">{offTrackMessage(extra.length)}</p>
           )}
           {item.type === 'move' && step && !offTrack && (
             <>
@@ -322,7 +332,9 @@ function LessonBody({
                   ))}
                 </div>
               )}
-              <p className="move-desc">{describeMove(n, item.move)}</p>
+              <p className="move-desc">
+                {remaining ? `Xoay tiếp: ${describeMove(n, remaining[0])}` : describeMove(n, item.move)}
+              </p>
               {item.stepIndex === 0 && <p className="hint">{DRAG_HINT}</p>}
             </>
           )}
@@ -342,6 +354,15 @@ function LessonBody({
               </button>
               <button className="btn primary" disabled={busy} onClick={continueFromHere}>
                 Giải tiếp từ đây
+              </button>
+            </>
+          ) : partial ? (
+            <>
+              <button className="btn" disabled={busy} onClick={undoExtra}>
+                Lùi
+              </button>
+              <button className="btn primary" disabled={busy} onClick={performRemaining}>
+                Tiếp
               </button>
             </>
           ) : item.type === 'done' ? (
