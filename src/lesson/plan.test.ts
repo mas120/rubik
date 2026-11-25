@@ -9,6 +9,7 @@ import {
   mulberry32,
   randomScramble,
   solve,
+  ALGS4,
   type Cube,
   type StageId,
 } from '../core'
@@ -21,6 +22,7 @@ import {
   focusAt,
   fullStageKeys,
 } from './plan'
+import { STAGES4 } from './texts4'
 import {
   ALG_NAME,
   CASE_TEXT,
@@ -102,9 +104,9 @@ describe('buildPlan4', () => {
       const plan = buildPlan4(cube)
       const items = buildItems(plan)
       const keys = fullStageKeys(4)
-      expect(keys).toHaveLength(11)
+      expect(keys).toHaveLength(12)
       expect(plan.stages.map((s) => s.key)).toEqual(keys.filter((k) => plan.steps.some((s) => s.stage === k)))
-      const firstThree = plan.stages.find((s) => !['centres', 'edges', 'parity'].includes(s.key))
+      const firstThree = plan.stages.find((s) => !(STAGES4 as readonly string[]).includes(s.key))
       if (firstThree) expect(firstThree.goal.startsWith(FIRST_3X3_PREFIX)).toBe(true)
       expect(plan.stages.filter((s) => s.goal.includes(FIRST_3X3_PREFIX))).toHaveLength(firstThree ? 1 : 0)
       for (const step of plan.steps) {
@@ -125,6 +127,17 @@ describe('buildPlan4', () => {
         }
       })
     }
+  }, 120000)
+
+  it('lists the formulas in 4x4 stage intros', () => {
+    const edgesPlan = buildPlan4(scramble4(300))
+    const edges = edgesPlan.stages.find((s) => s.key === 'edges')!
+    expect(edges.algs).toEqual([{ name: 'Ghép cạnh', notation: ALGS4.pairLast.join(' ') }])
+    const oll = buildPlan4(m4.applyAll(m4.solved, ALGS4.ollParity)).stages.find((s) => s.key === 'parityOll')!
+    expect(oll.algs).toEqual([{ name: 'Lật cạnh (đặc biệt 1)', notation: ALGS4.ollParity.join(' ') }])
+    const pll = buildPlan4(m4.applyAll(m4.solved, ALGS4.pllParity)).stages.find((s) => s.key === 'parityPll')!
+    expect(pll.algs).toEqual([{ name: 'Đổi hai cạnh (đặc biệt 2)', notation: ALGS4.pllParity.join(' ') }])
+    expect(edgesPlan.stages.find((s) => s.key === 'centres')!.algs).toEqual([])
   }, 120000)
 
   it('describes all 63 moves', () => {

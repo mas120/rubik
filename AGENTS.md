@@ -19,3 +19,7 @@ React + TypeScript + Vite + three.js. UI text is Vietnamese. Deployed to GitHub 
 - The owner is not a developer: explain in plain Vietnamese, avoid git/dev jargon.
 - The app targets complete beginners: every screen must explain what to do in plain words.
 - Git identity is not configured on this machine. Commit as the owner without changing git config: `git -c user.name="mas120" -c user.email="19644493+mas120@users.noreply.github.com" commit ...`
+
+## 4x4 lesson method
+
+The 4x4 lesson follows the teaching order of https://www.youtube.com/watch?v=H1rfyVyowso (owner's reference): centres one colour at a time (white, yellow, red, blue, orange, green), edge pairing with the single formula `Dw R F' U R' F Dw'`, then the 3x3 stages, with the two parity cases fixed when met (before the yellow cross, and right after it) instead of up front. Keep lesson texts consistent with that video.

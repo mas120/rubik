@@ -2,20 +2,31 @@ import { COLOUR_NAME } from '../colors'
 import type { Face, ValidationError4 } from '../core'
 import { MOVE_DESC } from './texts'
 
-export const STAGES4 = ['centres', 'edges', 'parity'] as const
+export const STAGES4 = ['centres', 'edges', 'parityOll', 'parityPll'] as const
+
+export const STAGE_ALGS4: Record<(typeof STAGES4)[number], string[]> = {
+  centres: [],
+  edges: ['pairLast'],
+  parityOll: ['ollParity'],
+  parityPll: ['pllParity'],
+}
 
 export const STAGE_TEXT4: Record<(typeof STAGES4)[number], { title: string; goal: string }> = {
   centres: {
     title: 'Ghép tâm',
-    goal: 'Khối 4×4 không có ô tâm cố định. Ghép 4 ô tâm cùng màu thành một khối 2×2 trên mỗi mặt: trắng ở dưới trước, rồi vàng ở trên, cuối cùng là bốn mặt bên theo đúng thứ tự màu.',
+    goal: 'Khối 4×4 không có ô tâm cố định: mỗi mặt có 4 ô tâm và chúng di chuyển được. Việc đầu tiên là gom 4 ô tâm cùng màu về một mặt. Làm theo thứ tự: trắng trước, rồi vàng ở mặt đối diện, rồi đỏ, xanh dương, cam; mặt xanh lá còn lại sẽ tự xong. Cách làm luôn giống nhau: đưa ô tâm vào chỗ, rồi trả lớp vừa xoay về chỗ cũ để không phá các tâm đã xong.',
   },
   edges: {
     title: 'Ghép cặp cạnh',
-    goal: 'Mỗi cạnh của 4×4 gồm hai viên nhỏ. Ghép hai viên cùng màu lại thành một cặp cho đủ 12 cạnh, không làm hỏng các tâm.',
+    goal: 'Mỗi cạnh của khối 4×4 gồm hai viên cạnh nhỏ. Tìm hai viên cùng màu, đưa chúng về hàng dưới, nằm thẳng hàng ở hai bên mặt trước, rồi làm một công thức duy nhất để ghép chúng thành một cặp. Lặp lại cho đủ 12 cặp. Các tâm đã xong sẽ không bị phá.',
   },
-  parity: {
-    title: 'Lỗi chẵn lẻ',
-    goal: 'Khối 4×4 có thể rơi vào tình huống không thể xảy ra trên 3×3. Sửa ngay bây giờ bằng một công thức dài, để phần giải như 3×3 phía sau không bị kẹt.',
+  parityOll: {
+    title: 'Trường hợp đặc biệt 1',
+    goal: 'Khối 4×4 có hai trường hợp đặc biệt không bao giờ gặp ở khối 3×3. Đây là trường hợp thứ nhất: khi chuẩn bị làm chữ thập vàng, số cạnh vàng ngửa lên là số lẻ (1 hoặc 3). Sửa bằng một công thức dài — cứ làm chậm từng nước theo mũi tên, chỉ cần làm một lần.',
+  },
+  parityPll: {
+    title: 'Trường hợp đặc biệt 2',
+    goal: 'Đây là trường hợp đặc biệt thứ hai của khối 4×4: có hai cạnh ở tầng trên bị đổi chỗ cho nhau, nếu cứ giải tiếp như khối 3×3 thì sẽ không bao giờ xong. Sửa bằng một công thức ngắn, chỉ gồm các nước xoay nửa vòng.',
   },
 }
 
@@ -33,21 +44,21 @@ export const ALG_LABEL4: Record<string, string> = {
   pairB: 'Ghép cạnh',
   pairC: 'Tách lệch cạnh',
   pairFlip: 'Lật cạnh',
-  pairLast: 'Ghép hai cạnh cuối',
+  pairLast: 'Ghép cạnh',
   wingCycle3: 'Đổi ba viên cạnh',
-  ollParity: 'Lật cạnh (chẵn lẻ)',
-  pllParity: 'Đổi hai cạnh (chẵn lẻ)',
+  ollParity: 'Lật cạnh (đặc biệt 1)',
+  pllParity: 'Đổi hai cạnh (đặc biệt 2)',
 }
 
 export function explain4(caseId: string, target: Face | null): string | null {
   const colour = target ? COLOUR_NAME[target] : ''
   switch (caseId) {
     case 'centreD':
-      return 'Đưa thêm ô tâm trắng (đang sáng) vào mặt dưới.'
+      return 'Đưa thêm ô tâm trắng (đang sáng) về mặt dưới, rồi trả lớp vừa xoay về chỗ cũ.'
     case 'centreU':
-      return 'Đưa thêm ô tâm vàng (đang sáng) vào mặt trên, không làm hỏng tâm trắng.'
+      return 'Đưa thêm ô tâm vàng (đang sáng) lên mặt trên, đối diện mặt trắng, rồi trả lớp vừa xoay về để tâm trắng không bị phá.'
     case 'centreSides':
-      return `Đưa thêm ô tâm ${colour} (đang sáng) vào đúng mặt của nó, giữ nguyên các tâm đã xong.`
+      return `Đưa thêm ô tâm ${colour} (đang sáng) về đúng mặt của nó, rồi trả lớp vừa xoay về để các tâm đã xong không bị phá.`
     case 'centreCycle':
       return 'Các ô tâm còn sai nằm ở vị trí khó nên dùng công thức đổi chỗ ba ô tâm. Các nước chuẩn bị đưa ba ô đó về vị trí của công thức, sau cùng trả lại như cũ.'
     case 'pairA':
@@ -58,13 +69,13 @@ export function explain4(caseId: string, target: Face | null): string | null {
     case 'pairFlip':
       return 'Lật cạnh này để hai viên cùng màu có thể gặp nhau.'
     case 'pairLast':
-      return 'Dùng công thức ghép hai cạnh cuối: nó ghép cặp mà không cần cạnh nào khác để thay vào.'
+      return 'Hai viên cạnh cùng màu (đang sáng) được đưa về hàng dưới, thẳng hàng ở hai bên mặt trước. Làm công thức ghép cạnh: hai tầng dưới xoay để hai viên gặp nhau, cặp vừa ghép nằm ở cạnh đứng bên phải mặt trước, rồi hai tầng dưới trả về để giữ nguyên các tâm.'
     case 'edgeCycle':
       return 'Dùng công thức đổi chỗ ba viên cạnh để ghép cặp còn lại. Các nước chuẩn bị đưa ba viên về vị trí của công thức, sau cùng trả lại như cũ.'
     case 'oll':
-      return 'Có một cạnh bị lật ngược theo cách không thể xảy ra trên 3×3. Làm công thức lật cạnh — dài, nhưng chỉ cần một lần.'
+      return 'Số cạnh vàng ngửa lên đang là số lẻ. Làm công thức dài này một lần để lật cặp cạnh phía trước của tầng trên; sau đó làm chữ thập vàng như bình thường.'
     case 'pll':
-      return 'Có hai cạnh bị đổi chỗ theo cách không thể xảy ra trên 3×3. Làm công thức đổi hai cạnh.'
+      return 'Làm công thức này để đổi chỗ cặp cạnh phía trước với cặp cạnh phía sau của tầng trên (tầng trên cũng bị xoay nửa vòng theo, không sao); sau đó giải tiếp như khối 3×3.'
     default:
       return null
   }

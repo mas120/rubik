@@ -509,9 +509,14 @@ export function solve(cube: Cube): Solution {
   }
   if (validate(cube).length > 0) throw new Error('Cube is not solvable')
 
+  const steps = solveStages(cube, STAGE_ORDER)
+  return { steps, moves: steps.flatMap((s) => [...s.setup, ...s.alg]) }
+}
+
+export function solveStages(cube: Cube, stages: readonly StageId[]): Step[] {
   const run: Run = { cube, steps: [] }
-  for (const stage of STAGE_ORDER) {
+  for (const stage of stages) {
     if (!stageDone(run.cube, stage)) STAGE_SOLVERS[stage](run)
   }
-  return { steps: run.steps, moves: run.steps.flatMap((s) => [...s.setup, ...s.alg]) }
+  return run.steps
 }

@@ -1,6 +1,7 @@
 import { pieceLabel } from '../colors'
 import {
   ALGS,
+  ALGS4,
   formatMoves,
   getModel,
   locatePiece,
@@ -18,7 +19,7 @@ import {
   STAGE_ORDER,
   STAGE_TEXT,
 } from './texts'
-import { ALG_LABEL4, FIRST_3X3_PREFIX, MOVE_DESC4, STAGES4, STAGE_TEXT4, explain4 } from './texts4'
+import { ALG_LABEL4, FIRST_3X3_PREFIX, MOVE_DESC4, STAGES4, STAGE_ALGS4, STAGE_TEXT4, explain4 } from './texts4'
 
 export interface PlanStage {
   key: string
@@ -58,7 +59,10 @@ export type LessonItem =
   | { type: 'done' }
 
 export function fullStageKeys(n: 3 | 4): string[] {
-  return n === 3 ? [...STAGE_ORDER] : [...STAGES4, ...STAGE_ORDER]
+  if (n === 3) return [...STAGE_ORDER]
+  const [centres, edges, parityOll, parityPll] = STAGES4
+  const [daisy, cross, corners, middle, lastCross, ...rest] = STAGE_ORDER
+  return [centres, edges, daisy, cross, corners, middle, parityOll, lastCross, parityPll, ...rest]
 }
 
 function stage3Info(stage: StageId, prefix: string): PlanStage {
@@ -129,8 +133,10 @@ export function buildPlan4(cube: Cube): LessonPlan {
   let prefixed = false
   const stages = keys.map((key): PlanStage => {
     if ((STAGES4 as readonly string[]).includes(key)) {
-      const text = STAGE_TEXT4[key as (typeof STAGES4)[number]]
-      return { key, title: text.title, goal: text.goal, algs: [] }
+      const id = key as (typeof STAGES4)[number]
+      const text = STAGE_TEXT4[id]
+      const algs = STAGE_ALGS4[id].map((algId) => ({ name: ALG_LABEL4[algId], notation: ALGS4[algId].join(' ') }))
+      return { key, title: text.title, goal: text.goal, algs }
     }
     const info = stage3Info(key as StageId, prefixed ? '' : FIRST_3X3_PREFIX)
     prefixed = true

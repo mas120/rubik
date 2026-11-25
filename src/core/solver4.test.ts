@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SOLVED, applyMoves, mulberry32, randomScramble, type Cube } from './cube'
+import { FACE_NORMALS, SOLVED, applyMoves, mulberry32, randomScramble, type Cube, type Face } from './cube'
 import { getModel } from './model'
 import { validate } from './validate'
 import {
@@ -19,7 +19,21 @@ import {
 } from './solver4'
 
 const m4 = getModel(4)
-const STAGE_ORDER: Stage4[] = ['centres', 'edges', 'parity', 'daisy', 'cross', 'firstLayerCorners', 'middleEdges', 'lastCross', 'lastEdges', 'lastCornersPosition', 'lastCornersOrientation']
+const STAGE_ORDER: Stage4[] = [
+  'centres',
+  'edges',
+  'daisy',
+  'cross',
+  'firstLayerCorners',
+  'middleEdges',
+  'parityOll',
+  'lastCross',
+  'parityPll',
+  'lastEdges',
+  'lastCornersPosition',
+  'lastCornersOrientation',
+]
+const CENTRE_TARGETS: Face[] = ['D', 'U', 'L', 'B', 'R', 'F']
 const STUCK = [
   'RURRDDULDDUFDRBRBUUUUBBFLUFFUUDBLFUDBFDRDBUDBBLLRRFFDRFFBRLRBLFDDBFFBLLLUBLLLRRUFULFLRDDRRFBLDBU',
   'BBUULBDRFRURLUUFLBDFDUBFLRLBFDRLFLFUFFFFDFBFRUUDUBBRLBLLLDDUBRBBDDLDBRLRDFDFLBUBRFLRRLURDURRDDUU',
@@ -87,6 +101,60 @@ describe('solver4 sanity', () => {
   }, 60000)
 })
 
+function stickersBetween(a: Face, b: Face): number[] {
+  const axisOf = (face: Face) => FACE_NORMALS[face].findIndex((v) => v !== 0)
+  const extremeOf = (face: Face) => (FACE_NORMALS[face][axisOf(face)] > 0 ? 3 : 0)
+  return m4.stickers
+    .map((sticker, index) => ({ sticker, index }))
+    .filter(
+      ({ sticker }) =>
+        sticker.face === a &&
+        sticker.cell[axisOf(b)] === extremeOf(b) &&
+        sticker.cell.filter((v) => v === 0 || v === 3).length === 2,
+    )
+    .map(({ index }) => index)
+}
+
+function changedFromSolved(moves: readonly string[]): number[] {
+  const cube = m4.applyAll(m4.solved, moves)
+  return cube.map((colour, i) => (colour === m4.solved[i] ? -1 : i)).filter((i) => i >= 0)
+}
+
+describe('parity algorithms', () => {
+  it('ollParity flips exactly the UF double edge', () => {
+    const changed = changedFromSolved(ALGS4.ollParity).sort((a, b) => a - b)
+    expect(changed).toEqual([...stickersBetween('U', 'F'), ...stickersBetween('F', 'U')].sort((a, b) => a - b))
+    const cube = m4.applyAll(m4.solved, ALGS4.ollParity)
+    for (const i of stickersBetween('U', 'F')) expect(cube[i]).toBe('F')
+    for (const i of stickersBetween('F', 'U')) expect(cube[i]).toBe('U')
+  })
+
+  it('pllParity is a half turn of the top layer plus a swap of the UF and UB double edges', () => {
+    const moves = [...ALGS4.pllParity, 'U2']
+    const changed = changedFromSolved(moves).sort((x, y) => x - y)
+    expect(changed).toEqual([...stickersBetween('F', 'U'), ...stickersBetween('B', 'U')].sort((x, y) => x - y))
+    const cube = m4.applyAll(m4.solved, moves)
+    for (const i of stickersBetween('F', 'U')) expect(cube[i]).toBe('B')
+    for (const i of stickersBetween('B', 'U')) expect(cube[i]).toBe('F')
+  })
+
+  it('an odd number of yellow-up U edges precedes every parityOll step', () => {
+    const upEdges = stickersBetween('U', 'F').concat(stickersBetween('U', 'B'), stickersBetween('U', 'L'), stickersBetween('U', 'R'))
+    let seen = 0
+    for (let seed = 0; seed < 60; seed++) {
+      const cube = scrambled4(seed + 20000)
+      const solution = solve4(cube)
+      const index = solution.steps.findIndex((step) => step.stage === 'parityOll')
+      if (index < 0) continue
+      seen++
+      const before = replay(cube, solution.steps.slice(0, index))
+      const up = upEdges.filter((i) => before[i] === 'U').length
+      expect((up / 2) % 2).toBe(1)
+    }
+    expect(seen).toBeGreaterThan(5)
+  }, 120000)
+})
+
 describe('solve4 smoke', () => {
   it('solves a few scrambles', () => {
     for (let seed = 0; seed < 5; seed++) {
@@ -105,12 +173,12 @@ describe('solve4 smoke', () => {
 
     const ollCube = m4.applyAll(m4.solved, ALGS4.ollParity)
     const ollSolution = solve4(ollCube)
-    expect(ollSolution.steps.some((step) => step.stage === 'parity' && step.caseId === 'oll')).toBe(true)
+    expect(ollSolution.steps.some((step) => step.stage === 'parityOll' && step.caseId === 'oll')).toBe(true)
     expect(m4.isSolved(replay(ollCube, ollSolution.steps))).toBe(true)
 
     const pllCube = m4.applyAll(m4.solved, ALGS4.pllParity)
     const pllSolution = solve4(pllCube)
-    expect(pllSolution.steps.some((step) => step.stage === 'parity' && step.caseId === 'pll')).toBe(true)
+    expect(pllSolution.steps.some((step) => step.stage === 'parityPll' && step.caseId === 'pll')).toBe(true)
     expect(m4.isSolved(replay(pllCube, pllSolution.steps))).toBe(true)
 
     expect(() => solve4([...m4.solved].slice(0, 95) as Cube)).toThrow()
@@ -239,6 +307,7 @@ describe('solve4 full', () => {
     let plls = 0
     let parityWithSetup = 0
     let cyclesSolves = 0
+    const combos = new Set<string>()
     const failures: string[] = []
     for (let seed = 0; seed < 200; seed++) {
       const cube = scrambled4(seed + 10000)
@@ -263,7 +332,7 @@ describe('solve4 full', () => {
         const stepMoves = [...step.setup, ...step.alg, ...step.cleanup]
         expect(stepMoves.length).toBeGreaterThan(0)
         for (const move of stepMoves) m4.spec(move)
-        if (step.stage === 'centres' || step.stage === 'edges' || step.stage === 'parity') {
+        if (step.stage === 'centres' || step.stage === 'edges' || step.stage === 'parityOll' || step.stage === 'parityPll') {
           for (const move of stepMoves) expect(/^[xyz]/.test(move)).toBe(false)
         }
         if (step.stage === 'centres' || step.stage === 'edges') {
@@ -274,8 +343,8 @@ describe('solve4 full', () => {
           }
           if (step.caseId !== 'centreCycle' && step.caseId !== 'edgeCycle') for (const move of step.setup) expect(/^2/.test(move)).toBe(false)
         }
-        if (step.stage === 'centres' || step.stage === 'edges' || step.stage === 'parity') {
-          if (step.stage === 'parity' && step.setup.length > 0) parityWithSetup++
+        if (step.stage === 'centres' || step.stage === 'edges' || step.stage === 'parityOll' || step.stage === 'parityPll') {
+          if (step.stage.startsWith('parity') && step.setup.length > 0) parityWithSetup++
           if (step.caseId === 'oll') olls++
           if (step.caseId === 'pll') plls++
         }
@@ -296,10 +365,20 @@ describe('solve4 full', () => {
         if (step.stage === 'edges' && (!next || next.stage !== 'edges')) {
           expect(edgesPaired(state) && centresSolved(state)).toBe(true)
         }
-        if (step.stage === 'parity' && (!next || next.stage !== 'parity')) {
-          expect(validate(reduce(state)!)).toEqual([])
-        }
       })
+      const reducedSteps = solution.steps.filter((step) => step.stage === 'centres' || step.stage === 'edges')
+      const reduced = reduce(replay(cube, reducedSteps))!
+      expect(reduced).not.toBeNull()
+      const kinds = validate(reduced).map((error) => error.kind)
+      const hasOll = solution.steps.some((step) => step.stage === 'parityOll')
+      const hasPll = solution.steps.some((step) => step.stage === 'parityPll')
+      expect(hasOll).toBe(kinds.includes('edgeFlip'))
+      expect(hasPll).toBe(kinds.includes('parity'))
+      combos.add(`${hasOll}/${hasPll}`)
+      const targets = solution.steps
+        .filter((step) => step.stage === 'centres' && step.target !== null)
+        .map((step) => CENTRE_TARGETS.indexOf(step.target!))
+      expect(targets).toEqual([...targets].sort((a, b) => a - b))
       if (solution.steps.some((step) => step.caseId === 'centreCycle')) cyclesSolves++
       for (const [stage, metric] of stageMetrics) {
         const list = perStage.get(stage) ?? []
@@ -335,8 +414,9 @@ describe('solve4 full', () => {
     }
     console.log('STATS ' + JSON.stringify(report))
     expect(failures).toEqual([])
-    expect(Math.max(...totalSteps)).toBeLessThanOrEqual(50)
-    expect(Math.max(...totalMoves)).toBeLessThanOrEqual(400)
+    expect([...combos].sort()).toEqual(['false/false', 'false/true', 'true/false', 'true/true'])
+    expect(Math.max(...totalSteps)).toBeLessThanOrEqual(60)
+    expect(Math.max(...totalMoves)).toBeLessThanOrEqual(450)
     expect(sorted[Math.floor(sorted.length / 2)]).toBeLessThanOrEqual(1500)
   }, 900000)
 })

@@ -122,18 +122,24 @@ export function basicsPages(n: 3 | 4): BasicsPage[] {
       blocks: [
         ...(is4
           ? [
-              { p: 'Khối 4×4 được giải bằng cách biến nó thành một khối 3×3 lớn, qua 3 giai đoạn:' },
+              { p: 'Khối 4×4 được giải bằng cách biến nó thành một khối 3×3 lớn, qua 2 giai đoạn:' },
               {
                 ul: [
-                  'Ghép tâm: gom 4 ô tâm cùng màu thành một khối 2×2 trên mỗi mặt.',
+                  'Ghép tâm: gom 4 ô tâm cùng màu về một mặt, lần lượt trắng, vàng, đỏ, xanh dương, cam.',
                   'Ghép cặp cạnh: ghép hai viên cạnh cùng màu thành một cặp, đủ 12 cặp.',
-                  'Lỗi chẵn lẻ: sửa tình huống đặc biệt chỉ có ở 4×4, nếu gặp.',
                 ],
               },
               { p: 'Sau đó giải tiếp y như khối 3×3, từng tầng từ dưới lên, qua 8 giai đoạn:' },
             ]
           : [{ p: 'App dạy cách giải dễ nhất cho người mới: giải từng tầng từ dưới lên, qua 8 giai đoạn:' }]),
         { ul: STAGE_BULLETS },
+        ...(is4
+          ? [
+              {
+                p: 'Khối 4×4 có thể gặp hai trường hợp đặc biệt không có ở khối 3×3: một lần khi làm chữ thập vàng và một lần ngay sau đó. Khi gặp, app sẽ báo và đưa công thức để sửa.',
+              },
+            ]
+          : []),
         { p: 'Mỗi giai đoạn chỉ cần một hoặc hai công thức ngắn, và app sẽ nhắc lại mỗi lần cần dùng.' },
       ],
     },

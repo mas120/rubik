@@ -29,7 +29,7 @@ describe('basicsPages', () => {
     it(`stage bullets match the lesson stage titles for ${n}x${n}`, () => {
       const found = lists(basicsPages(n)[4].blocks)
       expect(titles(found.at(-1)!)).toEqual(STAGE_ORDER.map((id) => STAGE_TEXT[id].title))
-      if (n === 4) expect(titles(found[0])).toEqual(STAGES4.map((id) => STAGE_TEXT4[id].title))
+      if (n === 4) expect(titles(found[0])).toEqual(STAGES4.slice(0, 2).map((id) => STAGE_TEXT4[id].title))
     })
   }
 

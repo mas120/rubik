@@ -12,7 +12,7 @@ import {
   type Cube,
   type Move,
 } from './cube'
-import { ALGS, locatePiece, solve, stageDone, type Solution, type StageId, type Step } from './solver'
+import { ALGS, locatePiece, solve, solveStages, stageDone, type Solution, type StageId, type Step } from './solver'
 
 const STAGES: StageId[] = [
   'daisy',
@@ -204,5 +204,15 @@ describe('solve', () => {
     const cube = [...SOLVED]
     ;[cube[7], cube[19]] = [cube[19], cube[7]]
     expect(() => solve(cube)).toThrow()
+  })
+})
+
+describe('solveStages', () => {
+  it('over all stages equals solve for 50 scrambles', () => {
+    for (let seed = 0; seed < 50; seed++) {
+      const cube = applyMoves(SOLVED, randomScramble(25, mulberry32(seed + 777)))
+      if (isSolved(cube)) continue
+      expect(solveStages(cube, STAGES)).toEqual(solve(cube).steps)
+    }
   })
 })

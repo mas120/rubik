@@ -1,6 +1,6 @@
-import { FACES, FACE_NORMALS, type Cube, type Face } from './cube'
+import { FACES, FACE_NORMALS, toHomeOrientation, type Cube, type Face } from './cube'
 import { getModel } from './model'
-import { solve, type StageId, type Step } from './solver'
+import { solveStages, type StageId, type Step } from './solver'
 import { validate } from './validate'
 
 export const ALGS4: Record<string, string[]> = {
@@ -20,7 +20,7 @@ export const ALGS4: Record<string, string[]> = {
   wingCycle3: ['2U', 'R', 'U', "R'", "2U'", 'R', "U'", "R'"],
 }
 
-export type Stage4 = 'centres' | 'edges' | 'parity' | StageId
+export type Stage4 = 'centres' | 'edges' | 'parityOll' | 'parityPll' | StageId
 
 export interface Step4 {
   stage: Stage4
@@ -573,9 +573,11 @@ function buildCandidates(names: readonly string[]): Candidate[] {
 
 const CENTRE_ALG_NAMES = ['centreA', 'centreA2', 'centreB', 'centreB2', 'centreC']
 const EDGE_ALG_NAMES = ['pairA', 'pairB', 'pairC', 'pairLast', 'pairFlip']
+const PRIMARY_EDGE_ALG_NAMES = ['pairLast']
 
 let centreCandidates: Candidate[] | null = null
 let edgeCandidates: Candidate[] | null = null
+let primaryEdgeCandidates: Candidate[] | null = null
 
 function getCentreCandidates(): Candidate[] {
   if (!centreCandidates) centreCandidates = buildCandidates(CENTRE_ALG_NAMES)
@@ -585,6 +587,16 @@ function getCentreCandidates(): Candidate[] {
 function getEdgeCandidates(): Candidate[] {
   if (!edgeCandidates) edgeCandidates = buildCandidates(EDGE_ALG_NAMES)
   return edgeCandidates
+}
+
+function getPrimaryEdgeCandidates(): Candidate[] {
+  if (!primaryEdgeCandidates) {
+    primaryEdgeCandidates = PRIMARY_EDGE_ALG_NAMES.map((algId, order) => {
+      const moves = ALGS4[algId]
+      return { algId, order, moves, perm: permOfMoves(moves) }
+    })
+  }
+  return primaryEdgeCandidates
 }
 
 function invertMoves4(moves: readonly string[]): string[] {
@@ -605,6 +617,30 @@ let setupsCache: Setup[] | null = null
 function getSetups(): Setup[] {
   if (!setupsCache) setupsCache = buildSetups()
   return setupsCache
+}
+
+let primarySetupsCache: Setup[] | null = null
+
+function getPrimarySetups(): Setup[] {
+  if (!primarySetupsCache) primarySetupsCache = buildPrimarySetups()
+  return primarySetupsCache
+}
+
+function buildPrimarySetups(): Setup[] {
+  const all: string[][] = [[]]
+  let layer: string[][] = [[]]
+  for (let depth = 0; depth < 3; depth++) {
+    const next: string[][] = []
+    for (const prefix of layer) {
+      for (const move of OUTER_MOVES) {
+        if (prefix.length > 0 && prefix[prefix.length - 1][0] === move[0]) continue
+        next.push([...prefix, move])
+      }
+    }
+    all.push(...next)
+    layer = next
+  }
+  return all.map((moves) => ({ moves, perm: permOfMoves(moves), cleanup: [], cleanupPerm: ID_PERM }))
 }
 
 function buildSetups(): Setup[] {
@@ -700,12 +736,16 @@ function buildCentreMacros(candidates: Candidate[]): CentreMacro[] {
   return dedupeMacros(macros, (macro) => macro.centrePerm.join(','))
 }
 
-function buildEdgeMacros(candidates: Candidate[]): EdgeMacro[] {
+function buildEdgeMacros(
+  candidates: Candidate[],
+  setups: Setup[] = getSetups(),
+  withCleanup = true,
+): EdgeMacro[] {
   const macros: EdgeMacro[] = []
   let genOrder = 0
   for (const candidate of candidates) {
-    for (const setup of getSetups()) {
-      const modes = setup.moves.length === 0 ? [false] : [true, false]
+    for (const setup of setups) {
+      const modes = setup.moves.length === 0 || !withCleanup ? [false] : [true, false]
       for (const useCleanup of modes) {
         const cleanup = useCleanup ? setup.cleanup : []
         const cleanupPerm = useCleanup ? setup.cleanupPerm : ID_PERM
@@ -755,6 +795,7 @@ function buildEdgeMacros(candidates: Candidate[]): EdgeMacro[] {
 
 let centreMacros: { sorted: CentreMacro[]; byGen: CentreMacro[] } | null = null
 let edgeMacros: { sorted: EdgeMacro[]; byGen: EdgeMacro[] } | null = null
+let primaryEdgeMacros: EdgeMacro[] | null = null
 
 function getCentreMacros() {
   if (!centreMacros) {
@@ -776,6 +817,13 @@ function getEdgeMacros() {
     }
   }
   return edgeMacros
+}
+
+function getPrimaryEdgeMacros(): EdgeMacro[] {
+  if (!primaryEdgeMacros) {
+    primaryEdgeMacros = buildEdgeMacros(getPrimaryEdgeCandidates(), getPrimarySetups(), false).sort(tieCompare)
+  }
+  return primaryEdgeMacros
 }
 
 function applyCompact(src: readonly number[], perm: Uint8Array): number[] {
@@ -877,22 +925,16 @@ function pushStep4(run: Run4, step: Step4, perm: Uint8Array): void {
   run.state = applyPerm(run.state, perm)
 }
 
-function centreFocus(state: readonly number[], after: readonly number[], macro: { perm: Uint8Array }): { focus: number[]; target: Face | null } {
+function centreFocus(state: readonly number[], after: readonly number[], macro: { perm: Uint8Array }): { focus: number[] } {
   const seen = new Set<number>()
-  const counts = [0, 0, 0, 0, 0, 0]
   for (let t = 0; t < 24; t++) {
     const index = centreGlobal[t]
     const target = centreFaceCode[t]
     if (state[index] === target || after[index] !== target) continue
     seen.add(index)
     seen.add(macro.perm[index])
-    counts[target]++
   }
-  let best = 0
-  for (let i = 1; i < 6; i++) if (counts[i] > counts[best]) best = i
-  let targetFace: Face | null = null
-  if (counts[best] > 0) targetFace = FACES[best]
-  return { focus: [...seen], target: targetFace }
+  return { focus: [...seen] }
 }
 
 function edgeFocus(state: readonly number[], after: readonly number[], macro: { perm: Uint8Array }): number[] {
@@ -919,9 +961,13 @@ function solveCentres4(run: Run4): void {
   const phases = [
     { caseId: 'centreD', faces: [3] },
     { caseId: 'centreU', faces: [3, 0] },
-    { caseId: 'centreSides', faces: [0, 1, 2, 3, 4, 5] },
+    { caseId: 'centreSides', faces: [3, 0, 4] },
+    { caseId: 'centreSides', faces: [3, 0, 4, 5] },
+    { caseId: 'centreSides', faces: [3, 0, 4, 5, 1] },
+    { caseId: 'centreSides', faces: [3, 0, 4, 5, 1, 2] },
   ]
   for (const phase of phases) {
+    const newest = FACES[phase.faces[phase.faces.length - 1]]
     const wanted = phase.faces.length * 4
     while (true) {
       guard(counter, () => `centres ${phase.caseId} state=${run.state.join('')}`)
@@ -961,13 +1007,13 @@ function solveCentres4(run: Run4): void {
       }
       if (best) {
         const after = applyPerm(run.state, best.perm)
-        const { focus, target } = centreFocus(run.state, after, best)
+        const { focus } = centreFocus(run.state, after, best)
         pushStep4(
           run,
           {
             stage: 'centres',
             caseId: phase.caseId,
-            target,
+            target: newest,
             piece: null,
             focus,
             setup: best.setup,
@@ -985,13 +1031,13 @@ function solveCentres4(run: Run4): void {
         const fullMoves = [...cycle.seq, ...ALGS4.centreCycle3, ...invertMoves4(cycle.seq)]
         const perm = permOfMoves(fullMoves)
         const after = applyPerm(run.state, perm)
-        const { focus, target } = centreFocus(run.state, after, { perm })
+        const { focus } = centreFocus(run.state, after, { perm })
         pushStep4(
           run,
           {
             stage: 'centres',
             caseId: 'centreCycle',
-            target,
+            target: newest,
             piece: null,
             focus,
             setup: cycle.seq,
@@ -1009,24 +1055,29 @@ function solveCentres4(run: Run4): void {
   }
 }
 
+function pickEdgeMacro(cols: readonly number[], beforeCount: number, macros: readonly EdgeMacro[]): EdgeMacro | null {
+  let best: EdgeMacro | null = null
+  let bestDelta = 0
+  for (const macro of macros) {
+    const next = new Array<number>(48)
+    for (let e = 0; e < 48; e++) next[e] = cols[macro.edgePerm[e]]
+    const delta = pairCount(pairMaskFromCols(next)) - beforeCount
+    if (delta < 1) continue
+    if (!best || delta > bestDelta) {
+      best = macro
+      bestDelta = delta
+    }
+  }
+  return best
+}
+
 function solveEdges4(run: Run4): void {
   const counter = { n: 0 }
   while (!edgesPairedNum(run.state)) {
     guard(counter, () => `edges pairs=${pairCount(pairMaskFromCols(edgeCols(run.state)))} state=${run.state.join('')}`)
     const cols = edgeCols(run.state)
     const beforeCount = pairCount(pairMaskFromCols(cols))
-    let best: EdgeMacro | null = null
-    let bestDelta = 0
-    for (const macro of getEdgeMacros().sorted) {
-      const next = new Array<number>(48)
-      for (let e = 0; e < 48; e++) next[e] = cols[macro.edgePerm[e]]
-      const delta = pairCount(pairMaskFromCols(next)) - beforeCount
-      if (delta < 1) continue
-      if (!best || delta > bestDelta) {
-        best = macro
-        bestDelta = delta
-      }
-    }
+    const best = pickEdgeMacro(cols, beforeCount, getPrimaryEdgeMacros()) ?? pickEdgeMacro(cols, beforeCount, getEdgeMacros().sorted)
     if (best) {
       const after = applyPerm(run.state, best.perm)
       const focus = edgeFocus(run.state, after, best)
@@ -1072,64 +1123,6 @@ function solveEdges4(run: Run4): void {
   }
 }
 
-interface ParityChoice {
-  setup: string[]
-  cleanup: string[]
-  perm: Uint8Array
-}
-
-function findParityMacro(state: readonly number[], algName: 'ollParity' | 'pllParity', kind: 'edgeFlip' | 'parity'): ParityChoice {
-  const alg = ALGS4[algName]
-  const algPerm = permOfMoves(alg)
-  for (const setup of getSetups()) {
-    const modes = setup.moves.length === 0 ? [false] : [true, false]
-    for (const useCleanup of modes) {
-      const cleanup = useCleanup ? setup.cleanup : []
-      const cleanupPerm = useCleanup ? setup.cleanupPerm : ID_PERM
-      const perm = composePerm(composePerm(setup.perm, algPerm), cleanupPerm)
-      const after = applyPerm(state, perm)
-      const reduced = reduceState(after)
-      if (!reduced) continue
-      const errors = validate(toCube3(reduced))
-      if (errors.some((error) => error.kind === kind)) continue
-      return { setup: setup.moves, cleanup, perm }
-    }
-  }
-  throw new Error('Solver did not converge')
-}
-
-function solveParity4(run: Run4): void {
-  for (let step = 0; step < 4; step++) {
-    const reduced = reduceState(run.state)
-    if (!reduced) throw new Error('Cube is not solvable')
-    const errors = validate(toCube3(reduced))
-    if (!errors.some((error) => error.kind === 'edgeFlip') && !errors.some((error) => error.kind === 'parity')) return
-    const kind = errors.some((error) => error.kind === 'edgeFlip') ? 'edgeFlip' : 'parity'
-    const algName = kind === 'edgeFlip' ? 'ollParity' : 'pllParity'
-    const caseId = kind === 'edgeFlip' ? 'oll' : 'pll'
-    const choice = findParityMacro(run.state, algName, kind)
-    const step4: Step4 = {
-      stage: 'parity',
-      caseId,
-      target: null,
-      piece: null,
-      focus: [],
-      setup: choice.setup,
-      algId: algName,
-      repeat: 1,
-      alg: ALGS4[algName],
-      cleanup: choice.cleanup,
-    }
-    pushStep4(run, step4, choice.perm)
-  }
-  const reduced = reduceState(run.state)
-  if (!reduced) throw new Error('Cube is not solvable')
-  const errors = validate(toCube3(reduced))
-  if (errors.some((error) => error.kind === 'edgeFlip') || errors.some((error) => error.kind === 'parity')) {
-    throw new Error('Solver did not converge')
-  }
-}
-
 function step3ToStep4(step: Step): Step4 {
   return {
     stage: step.stage,
@@ -1145,15 +1138,49 @@ function step3ToStep4(step: Step): Step4 {
   }
 }
 
+const BEFORE_OLL: StageId[] = ['daisy', 'cross', 'firstLayerCorners', 'middleEdges']
+const AFTER_PLL: StageId[] = ['lastEdges', 'lastCornersPosition', 'lastCornersOrientation']
+
+function reduceLoose(state: readonly number[]): Cube {
+  const out = new Array<number>(54).fill(-1)
+  for (const [from4, to3] of reducePairs) out[to3] = state[from4]
+  if (out.some((value) => value < 0)) throw new Error('Cube is not solvable')
+  return toCube3(out)
+}
+
+function runStages3(run: Run4, stages: readonly StageId[]): void {
+  const steps = solveStages(reduceLoose(run.state), stages)
+  for (const step of steps) {
+    run.steps.push(step3ToStep4(step))
+    run.state = applyPerm(run.state, permOfMoves([...step.setup, ...step.alg]))
+  }
+}
+
+function reducedHasError(run: Run4, kind: 'edgeFlip' | 'parity'): boolean {
+  const home = toHomeOrientation(reduceLoose(run.state)).cube
+  return validate(home).some((error) => error.kind === kind)
+}
+
+function pushParity(run: Run4, stage: 'parityOll' | 'parityPll', caseId: string, algId: string): void {
+  const alg = ALGS4[algId]
+  pushStep4(
+    run,
+    { stage, caseId, target: null, piece: null, focus: [], setup: [], algId, repeat: 1, alg, cleanup: [] },
+    permOfMoves(alg),
+  )
+}
+
 export function solve4(cube: Cube): Solution4 {
   if (cube.length !== 96) throw new Error('Expected 96 stickers')
   const run: Run4 = { state: toNums(cube), steps: [] }
   solveCentres4(run)
   solveEdges4(run)
-  solveParity4(run)
-  const reduced = reduceState(run.state)
-  if (!reduced) throw new Error('Cube is not solvable')
-  const solution3 = solve(toCube3(reduced))
-  for (const step of solution3.steps) run.steps.push(step3ToStep4(step))
+  if (!reduceState(run.state)) throw new Error('Cube is not solvable')
+  runStages3(run, BEFORE_OLL)
+  if (reducedHasError(run, 'edgeFlip')) pushParity(run, 'parityOll', 'oll', 'ollParity')
+  runStages3(run, ['lastCross'])
+  if (reducedHasError(run, 'parity')) pushParity(run, 'parityPll', 'pll', 'pllParity')
+  runStages3(run, AFTER_PLL)
+  if (!model.isSolved(toCube3(run.state))) throw new Error('Solver did not converge')
   return { steps: run.steps, moves: run.steps.flatMap((step) => [...step.setup, ...step.alg, ...step.cleanup]) }
 }
