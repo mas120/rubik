@@ -59,6 +59,10 @@ export function Lesson({ cube, initialCursor, persist, onHome, onFinish, onReent
   }, [current, highlight])
 
   useEffect(() => {
+    canvas.current?.setArrows(item.type === 'move' && !busy ? item.move : null)
+  }, [item, busy])
+
+  useEffect(() => {
     if (persist) saveLesson(cube, cursor)
   }, [cube, cursor, persist])
 

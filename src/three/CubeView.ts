@@ -1,20 +1,26 @@
 import {
   BoxGeometry,
   Color,
+  DoubleSide,
   Group,
+  Matrix4,
   Mesh,
   MeshBasicMaterial,
   PerspectiveCamera,
   Quaternion,
+  Raycaster,
   Scene,
   Shape,
   ShapeGeometry,
+  Vector2,
   Vector3,
   WebGLRenderer,
 } from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { BODY_HEX, COLOUR_HEX } from '../colors'
-import { STICKER_GEOMETRY, type Cube, type Move } from '../core'
+import { STICKER_GEOMETRY, type Cube, type Move, type Vec } from '../core'
+import { dragToMove } from './dragToMove'
+import { moveArrows } from './moveArrows'
 import { moveRotation } from './moveRotation'
 
 const DIM_TARGET = new Color('#222222')
@@ -22,6 +28,33 @@ const CAMERA_START = new Vector3(3.4, 3.2, 6.8)
 const BASE_FOV = 34
 
 const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2)
+
+const ARROW_COLOUR = '#19e3ff'
+
+function arrowShapes(double: boolean, grow: number): Shape[] {
+  const half = 0.14 + grow
+  const tip = 1.15 + grow * 1.8
+  const headLength = 0.6
+  const headHalf = 0.3 + grow
+  const heads = double ? [tip, tip - 0.45] : [tip]
+  const last = heads[heads.length - 1]
+  const shaft = new Shape()
+  shaft.moveTo(-1.15 - grow, -half)
+  shaft.lineTo(last - headLength + 0.1, -half)
+  shaft.lineTo(last - headLength + 0.1, half)
+  shaft.lineTo(-1.15 - grow, half)
+  shaft.closePath()
+  const shapes = [shaft]
+  for (const x of heads) {
+    const head = new Shape()
+    head.moveTo(x - headLength, -headHalf)
+    head.lineTo(x, 0)
+    head.lineTo(x - headLength, headHalf)
+    head.closePath()
+    shapes.push(head)
+  }
+  return shapes
+}
 
 function stickerShape(size: number, radius: number): Shape {
   const h = size / 2
@@ -52,6 +85,11 @@ export class CubeView {
   private highlight: readonly number[] | null = null
   private finishCurrent: (() => void) | null = null
   private disposed = false
+  private raycaster = new Raycaster()
+  private stickerIndex = new Map<object, number>()
+  private arrowGroup: Group | null = null
+  private interactive: ((move: Move) => void) | null = null
+  private drag: { id: number; x: number; y: number; index: number; fired: boolean } | null = null
 
   private container: HTMLElement
 
@@ -73,6 +111,11 @@ export class CubeView {
     this.controls.enableDamping = false
     this.controls.addEventListener('change', this.requestRender)
     this.controls.update()
+    const dom = this.renderer.domElement
+    dom.addEventListener('pointerdown', this.onPointerDown, { capture: true })
+    dom.addEventListener('pointermove', this.onPointerMove)
+    dom.addEventListener('pointerup', this.onPointerEnd)
+    dom.addEventListener('pointercancel', this.onPointerEnd)
 
     this.observer = new ResizeObserver(this.resize)
     this.observer.observe(container)
@@ -98,13 +141,14 @@ export class CubeView {
       }
     }
     const up = new Vector3(0, 0, 1)
-    STICKER_GEOMETRY.forEach(({ pos, normal }) => {
+    STICKER_GEOMETRY.forEach(({ pos, normal }, index) => {
       const material = new MeshBasicMaterial({ color: '#000000' })
       const mesh = new Mesh(stickerGeometry, material)
       const n = new Vector3(...normal)
       mesh.quaternion.copy(new Quaternion().setFromUnitVectors(up, n))
       mesh.position.copy(n.multiplyScalar(0.482))
       byPos.get(pos.join(','))!.add(mesh)
+      this.stickerIndex.set(mesh, index)
       this.stickers.push(material)
     })
   }
@@ -148,6 +192,141 @@ export class CubeView {
     this.requestRender()
   }
 
+  setInteractive(onMove: ((move: Move) => void) | null): void {
+    this.interactive = onMove
+  }
+
+  private pickSticker(event: PointerEvent): number | null {
+    const rect = this.renderer.domElement.getBoundingClientRect()
+    const ndc = new Vector2(
+      ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      -((event.clientY - rect.top) / rect.height) * 2 + 1,
+    )
+    this.camera.updateMatrixWorld()
+    this.raycaster.setFromCamera(ndc, this.camera)
+    const hit = this.raycaster.intersectObjects(
+      this.cubies.map((c) => c.group),
+      true,
+    )[0]
+    if (!hit) return null
+    const direct = this.stickerIndex.get(hit.object)
+    if (direct !== undefined) return direct
+    if (!hit.face || !hit.object.parent) return null
+    const p = hit.object.parent.position
+    const n = hit.face.normal
+    const index = STICKER_GEOMETRY.findIndex(
+      (g) =>
+        g.pos[0] === Math.round(p.x) &&
+        g.pos[1] === Math.round(p.y) &&
+        g.pos[2] === Math.round(p.z) &&
+        g.normal[0] === Math.round(n.x) &&
+        g.normal[1] === Math.round(n.y) &&
+        g.normal[2] === Math.round(n.z),
+    )
+    return index >= 0 ? index : null
+  }
+
+  private onPointerDown = (event: PointerEvent): void => {
+    if (!this.interactive || this.finishCurrent || event.button !== 0 || this.drag) return
+    const index = this.pickSticker(event)
+    if (index === null) return
+    this.controls.enabled = false
+    this.drag = { id: event.pointerId, x: event.clientX, y: event.clientY, index, fired: false }
+    this.renderer.domElement.setPointerCapture(event.pointerId)
+  }
+
+  private onPointerMove = (event: PointerEvent): void => {
+    const drag = this.drag
+    if (!drag || drag.fired || drag.id !== event.pointerId) return
+    const dx = event.clientX - drag.x
+    const dy = event.clientY - drag.y
+    const length = Math.hypot(dx, dy)
+    if (length < 14) return
+    drag.fired = true
+    const { pos, normal } = STICKER_GEOMETRY[drag.index]
+    const rect = this.renderer.domElement.getBoundingClientRect()
+    this.camera.updateMatrixWorld()
+    const toScreen = (v: Vector3) => {
+      const q = v.clone().project(this.camera)
+      return new Vector2(((q.x + 1) / 2) * rect.width, ((1 - q.y) / 2) * rect.height)
+    }
+    const point = new Vector3(pos[0] + normal[0] * 0.48, pos[1] + normal[1] * 0.48, pos[2] + normal[2] * 0.48)
+    const origin = toScreen(point)
+    let best: { score: number; axis: Vec; sign: 1 | -1 } | null = null
+    const axes: Vec[] = [
+      [1, 0, 0],
+      [0, 1, 0],
+      [0, 0, 1],
+    ]
+    for (const axis of axes) {
+      if (axis[0] * normal[0] + axis[1] * normal[1] + axis[2] * normal[2] !== 0) continue
+      for (const sign of [1, -1] as const) {
+        const motion = new Vector3(...axis).cross(point).multiplyScalar(0.2 * sign)
+        const delta = toScreen(point.clone().add(motion)).sub(origin)
+        const score = (delta.x * dx + delta.y * dy) / ((delta.length() || 1) * length)
+        if (!best || score > best.score) best = { score, axis, sign }
+      }
+    }
+    const move = best ? dragToMove(pos, best.axis, best.sign) : null
+    if (move) this.interactive?.(move)
+  }
+
+  private onPointerEnd = (event: PointerEvent): void => {
+    if (!this.drag || this.drag.id !== event.pointerId) return
+    this.drag = null
+    this.controls.enabled = true
+    if (this.renderer.domElement.hasPointerCapture(event.pointerId)) {
+      this.renderer.domElement.releasePointerCapture(event.pointerId)
+    }
+  }
+
+  setArrows(move: Move | null): void {
+    if (this.arrowGroup) {
+      this.scene.remove(this.arrowGroup)
+      this.arrowGroup.traverse((o) => {
+        if (o instanceof Mesh) {
+          o.geometry.dispose()
+          ;(o.material as MeshBasicMaterial).dispose()
+        }
+      })
+      this.arrowGroup = null
+    }
+    if (move) {
+      const group = new Group()
+      for (const arrow of moveArrows(move)) {
+        const normal = new Vector3(...arrow.normal)
+        const dir = new Vector3(...arrow.dir)
+        const side = new Vector3().crossVectors(normal, dir)
+        const basis = new Matrix4().makeBasis(dir, side, normal)
+        const layers: [number, number, string][] = [
+          [0.04, 0.02, '#000000'],
+          [0, 0.03, ARROW_COLOUR],
+        ]
+        for (const [grow, lift, colour] of layers) {
+          const material = new MeshBasicMaterial({
+            color: colour,
+            side: DoubleSide,
+            polygonOffset: true,
+            polygonOffsetFactor: -2 - lift * 10,
+            polygonOffsetUnits: -2,
+          })
+          const mesh = new Mesh(new ShapeGeometry(arrowShapes(arrow.double, grow)), material)
+          mesh.matrixAutoUpdate = false
+          mesh.matrix.copy(basis)
+          mesh.matrix.setPosition(
+            arrow.center[0] + normal.x * (lift - 0.018),
+            arrow.center[1] + normal.y * (lift - 0.018),
+            arrow.center[2] + normal.z * (lift - 0.018),
+          )
+          group.add(mesh)
+        }
+      }
+      this.arrowGroup = group
+      this.scene.add(group)
+    }
+    this.requestRender()
+  }
+
   private resetTransforms(): void {
     for (const { group } of this.cubies) {
       if (group.parent !== this.scene) this.scene.add(group)
@@ -157,6 +336,7 @@ export class CubeView {
 
   animateMove(move: Move, before: Cube, after: Cube, ms: number): Promise<void> {
     this.finishCurrent?.()
+    if (this.arrowGroup) this.arrowGroup.visible = false
     this.resetTransforms()
     this.setState(before, this.highlight)
     const { axis, angle, whole } = moveRotation(move)
@@ -204,6 +384,11 @@ export class CubeView {
     cancelAnimationFrame(this.frame)
     this.observer.disconnect()
     this.controls.removeEventListener('change', this.requestRender)
+    const dom = this.renderer.domElement
+    dom.removeEventListener('pointerdown', this.onPointerDown, { capture: true })
+    dom.removeEventListener('pointermove', this.onPointerMove)
+    dom.removeEventListener('pointerup', this.onPointerEnd)
+    dom.removeEventListener('pointercancel', this.onPointerEnd)
     this.controls.dispose()
     this.scene.traverse((object) => {
       if (object instanceof Mesh) object.geometry.dispose()

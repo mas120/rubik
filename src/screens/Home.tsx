@@ -3,9 +3,10 @@ interface Props {
   onContinue(): void
   onInput(): void
   onSample(): void
+  onFree(): void
 }
 
-export function Home({ hasSaved, onContinue, onInput, onSample }: Props) {
+export function Home({ hasSaved, onContinue, onInput, onSample, onFree }: Props) {
   return (
     <main className="screen home">
       <div className="home-title">
@@ -23,6 +24,9 @@ export function Home({ hasSaved, onContinue, onInput, onSample }: Props) {
         </button>
         <button className="btn" onClick={onSample}>
           Thử với khối mẫu
+        </button>
+        <button className="btn" onClick={onFree}>
+          Xoay tự do
         </button>
       </div>
     </main>

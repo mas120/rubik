@@ -6,6 +6,8 @@ export interface CubeCanvasHandle {
   setState(cube: Cube, highlight: readonly number[] | null): void
   animateMove(move: Move, before: Cube, after: Cube, ms: number): Promise<void>
   resetCamera(): void
+  setArrows(move: Move | null): void
+  setInteractive(onMove: ((move: Move) => void) | null): void
 }
 
 interface Props {
@@ -37,6 +39,8 @@ export const CubeCanvas = forwardRef<CubeCanvasHandle, Props>(function CubeCanva
     animateMove: (move, before, after, ms) =>
       view.current ? view.current.animateMove(move, before, after, ms) : Promise.resolve(),
     resetCamera: () => view.current?.resetCamera(),
+    setArrows: (move) => view.current?.setArrows(move),
+    setInteractive: (onMove) => view.current?.setInteractive(onMove),
   }))
 
   return <div className="cube-canvas" ref={container} />

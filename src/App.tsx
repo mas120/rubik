@@ -7,6 +7,7 @@ import {
   randomScramble,
   type Cube,
 } from './core'
+import { FreePlay } from './screens/FreePlay'
 import { Home } from './screens/Home'
 import { Input } from './screens/Input'
 import { Lesson } from './screens/Lesson'
@@ -14,6 +15,7 @@ import { clearDraft, clearLesson, loadLesson, saveLesson } from './storage'
 
 type Screen =
   | { name: 'home' }
+  | { name: 'free'; persist: boolean }
   | { name: 'input'; prefill?: Cube; persist: boolean }
   | { name: 'lesson'; id: number; cube: Cube; cursor: number; persist: boolean }
 
@@ -38,6 +40,7 @@ function initialScreen(): Screen {
       persist: false,
     }
   }
+  if (params.get('screen') === 'free') return { name: 'free', persist: false }
   if (params.get('screen') === 'input') return { name: 'input', persist: false }
   return { name: 'home' }
 }
@@ -54,6 +57,10 @@ function App() {
   const goHome = () => {
     setSaved(loadLesson())
     setScreen({ name: 'home' })
+  }
+
+  if (screen.name === 'free') {
+    return <FreePlay persist={screen.persist} onHome={goHome} onTeach={(cube) => startLesson(cube, 0, true)} />
   }
 
   if (screen.name === 'input') {
@@ -94,6 +101,7 @@ function App() {
       onContinue={() => saved && startLesson(saved.cube, saved.cursor, true)}
       onInput={() => setScreen({ name: 'input', persist: true })}
       onSample={() => startLesson(scrambledCube(Math.random), 0, true)}
+      onFree={() => setScreen({ name: 'free', persist: true })}
     />
   )
 }

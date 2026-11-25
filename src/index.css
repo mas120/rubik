@@ -402,3 +402,33 @@ code {
   color: #9aa3b5;
   font-size: 0.82rem;
 }
+
+.free {
+  gap: 0.5rem;
+}
+
+.hint-line {
+  margin: 0;
+  color: #9aa3b5;
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
+.status-line {
+  margin: 0;
+  font-weight: 700;
+}
+
+.free-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+.free-buttons .wide {
+  grid-column: 1 / -1;
+}
+
+.free-buttons .btn {
+  padding: 0 0.25rem;
+}

@@ -1,7 +1,21 @@
-import { FACES, cubeFromString, cubeToString, normalize, solve, validate, type Cube, type Face } from './core'
+import {
+  FACES,
+  SOLVED,
+  applyMoves,
+  cubeFromString,
+  cubeToString,
+  normalize,
+  parseMoves,
+  solve,
+  validate,
+  type Cube,
+  type Face,
+  type Move,
+} from './core'
 
 const LESSON_KEY = 'rubik.lesson.v1'
 const INPUT_KEY = 'rubik.input.v1'
+const FREE_KEY = 'rubik.free.v1'
 
 export interface SavedLesson {
   cube: Cube
@@ -71,5 +85,42 @@ export function clearDraft(): void {
     localStorage.removeItem(INPUT_KEY)
   } catch {
     return
+  }
+}
+
+export interface SavedFree {
+  cube: Cube
+  history: Move[]
+}
+
+export function saveFree(cube: Cube, history: readonly Move[]): void {
+  try {
+    localStorage.setItem(FREE_KEY, JSON.stringify({ cube: cubeToString(cube), history }))
+  } catch {
+    return
+  }
+}
+
+export function loadFree(): SavedFree | null {
+  try {
+    const raw = localStorage.getItem(FREE_KEY)
+    if (!raw) return null
+    const data = JSON.parse(raw) as { cube: string; history: string[] }
+    const cube = cubeFromString(data.cube)
+    const history = parseMoves(data.history.join(' '))
+    if (history.some((m) => m[0] === 'y')) throw new Error('invalid')
+    const normalised = normalize(cube)
+    if (!normalised || normalised.some((s, i) => s !== cube[i]) || validate(cube).length > 0) {
+      throw new Error('invalid')
+    }
+    if (applyMoves(SOLVED, history).some((s, i) => s !== cube[i])) throw new Error('invalid')
+    return { cube, history }
+  } catch {
+    try {
+      localStorage.removeItem(FREE_KEY)
+    } catch {
+      return null
+    }
+    return null
   }
 }
