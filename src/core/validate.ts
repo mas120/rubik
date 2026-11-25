@@ -19,12 +19,12 @@ export function normalize(cube: Cube): Cube | null {
 
 const setKey = (faces: readonly Face[]) => [...faces].sort().join('')
 
-interface PieceReading {
+export interface PieceReading {
   home: number[]
   orientation: number[]
 }
 
-function readPieces(cube: Cube, slots: readonly Slot[]): PieceReading | null {
+export function readPieces(cube: Cube, slots: readonly Slot[]): PieceReading | null {
   const homes = new Map(slots.map((s, i) => [setKey(s.faces), i]))
   const home: number[] = []
   const orientation: number[] = []

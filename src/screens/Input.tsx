@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { COLOUR_HEX, COLOUR_NAME } from '../colors'
-import { FACES, isSolved, validate, type Cube, type Face } from '../core'
+import { FACES, getModel, isSolved, validate, validate4, type Cube, type Face } from '../core'
 import { validationMessage } from '../lesson/texts'
-import { loadDraft, saveDraft } from '../storage'
+import { FACE_NAME4, INSTRUCTIONS4, validationMessage4 } from '../lesson/texts4'
+import { loadDraft, loadDraft4, saveDraft, saveDraft4 } from '../storage'
 
 const ORDER: readonly Face[] = ['F', 'R', 'B', 'L', 'U', 'D']
 
@@ -26,47 +27,53 @@ const NET_POSITION: Record<Face, [number, number]> = {
 
 const SOLVED_MESSAGE = 'Khối này đã được giải xong rồi!'
 
-function initialCells(prefill: Cube | undefined, persist: boolean): (Face | null)[] {
+function initialCells(n: 3 | 4, prefill: Cube | undefined, persist: boolean): (Face | null)[] {
   if (prefill) return [...prefill]
-  const draft = persist ? loadDraft() : null
-  const cells: (Face | null)[] = draft ?? Array<Face | null>(54).fill(null)
-  FACES.forEach((f, i) => {
-    cells[i * 9 + 4] = f
-  })
+  const draft = persist ? (n === 3 ? loadDraft() : loadDraft4()) : null
+  const cells: (Face | null)[] = draft ?? Array<Face | null>(6 * n * n).fill(null)
+  if (n === 3) {
+    FACES.forEach((f, i) => {
+      cells[i * 9 + 4] = f
+    })
+  }
   return cells
 }
 
 interface Props {
+  n: 3 | 4
   prefill?: Cube
   persist: boolean
   onBack(): void
   onStart(cube: Cube): void
 }
 
-export function Input({ prefill, persist, onBack, onStart }: Props) {
-  const [cells, setCells] = useState(() => initialCells(prefill, persist))
+export function Input({ n, prefill, persist, onBack, onStart }: Props) {
+  const per = n * n
+  const [cells, setCells] = useState(() => initialCells(n, prefill, persist))
   const [faceIndex, setFaceIndex] = useState(0)
   const [selected, setSelected] = useState<Face>('F')
   const [messages, setMessages] = useState<string[]>([])
 
   useEffect(() => {
-    if (persist && !prefill) saveDraft(cells)
-  }, [cells, persist, prefill])
+    if (!persist || prefill) return
+    if (n === 3) saveDraft(cells)
+    else saveDraft4(cells)
+  }, [cells, persist, prefill, n])
 
   const face = ORDER[faceIndex]
-  const base = FACES.indexOf(face) * 9
-  const remaining = (colour: Face) => 9 - cells.filter((c) => c === colour).length
-  const faceFull = cells.slice(base, base + 9).every((c) => c !== null)
+  const base = FACES.indexOf(face) * per
+  const remaining = (colour: Face) => per - cells.filter((c) => c === colour).length
+  const faceFull = cells.slice(base, base + per).every((c) => c !== null)
   const last = faceIndex === ORDER.length - 1
 
   const paint = (offset: number) => {
-    if (offset === 4) return
+    if (n === 3 && offset === 4) return
     const index = base + offset
     setMessages([])
     setCells((prev) => {
       const next = [...prev]
       if (prev[index] === selected) next[index] = null
-      else if (9 - prev.filter((c) => c === selected).length > 0) next[index] = selected
+      else if (per - prev.filter((c) => c === selected).length > 0) next[index] = selected
       return next
     })
   }
@@ -78,19 +85,19 @@ export function Input({ prefill, persist, onBack, onStart }: Props) {
 
   const submit = () => {
     const firstEmpty = ORDER.findIndex((f) =>
-      cells.slice(FACES.indexOf(f) * 9, FACES.indexOf(f) * 9 + 9).some((c) => c === null),
+      cells.slice(FACES.indexOf(f) * per, FACES.indexOf(f) * per + per).some((c) => c === null),
     )
     if (firstEmpty >= 0) {
       setFaceIndex(firstEmpty)
       return
     }
     const cube = cells as Cube
-    const errors = validate(cube)
-    if (errors.length > 0) {
-      setMessages([...new Set(errors.map(validationMessage))])
+    const found = n === 3 ? validate(cube).map(validationMessage) : validate4(cube).map(validationMessage4)
+    if (found.length > 0) {
+      setMessages([...new Set(found)])
       return
     }
-    if (isSolved(cube)) {
+    if (n === 3 ? isSolved(cube) : getModel(4).isSolved(cube)) {
       setMessages([SOLVED_MESSAGE])
       return
     }
@@ -101,21 +108,26 @@ export function Input({ prefill, persist, onBack, onStart }: Props) {
     <main className="screen input">
       <header className="input-head">
         <h2>
-          Mặt {faceIndex + 1}/6 — tâm {COLOUR_NAME[face]}
+          {n === 3
+            ? `Mặt ${faceIndex + 1}/6 — tâm ${COLOUR_NAME[face]}`
+            : `Mặt ${faceIndex + 1}/6 — ${FACE_NAME4[face]}`}
         </h2>
-        <p>{INSTRUCTIONS[face]}</p>
+        <p>{n === 3 ? INSTRUCTIONS[face] : INSTRUCTIONS4[face]}</p>
       </header>
 
       <div className="input-main">
-        <div className="grid" style={{ ['--face' as string]: COLOUR_HEX[face] }}>
-          {Array.from({ length: 9 }, (_, offset) => {
+        <div
+          className={`grid${n === 4 ? ' grid4' : ''}`}
+          style={{ ['--face' as string]: COLOUR_HEX[face], ['--n' as string]: n }}
+        >
+          {Array.from({ length: per }, (_, offset) => {
             const colour = cells[base + offset]
             return (
               <button
                 key={offset}
-                className={`cell${colour ? '' : ' empty'}${offset === 4 ? ' centre' : ''}`}
+                className={`cell${colour ? '' : ' empty'}${n === 3 && offset === 4 ? ' centre' : ''}`}
                 style={colour ? { background: COLOUR_HEX[colour] } : undefined}
-                disabled={offset === 4}
+                disabled={n === 3 && offset === 4}
                 onClick={() => paint(offset)}
                 aria-label={`Ô ${offset + 1}`}
               />
@@ -141,16 +153,16 @@ export function Input({ prefill, persist, onBack, onStart }: Props) {
       <div className="net" aria-label="Tiến độ">
         {ORDER.map((f) => {
           const [row, col] = NET_POSITION[f]
-          const start = FACES.indexOf(f) * 9
+          const start = FACES.indexOf(f) * per
           return (
             <button
               key={f}
               className={`net-face${f === face ? ' current' : ''}`}
-              style={{ gridRow: row, gridColumn: col }}
+              style={{ gridRow: row, gridColumn: col, ['--n' as string]: n }}
               onClick={() => jump(f)}
               aria-label={`Mặt ${COLOUR_NAME[f]}`}
             >
-              {cells.slice(start, start + 9).map((c, i) => (
+              {cells.slice(start, start + per).map((c, i) => (
                 <span key={i} style={{ background: c ? COLOUR_HEX[c] : '#2a2f3a' }} />
               ))}
             </button>

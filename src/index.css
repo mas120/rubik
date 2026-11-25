@@ -124,7 +124,7 @@ button {
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(var(--n, 3), 1fr);
   gap: 6px;
   width: min(100%, 260px, 36dvh);
   aspect-ratio: 1;
@@ -201,8 +201,8 @@ button {
 
 .net-face {
   display: grid;
-  grid-template-columns: repeat(3, 10px);
-  grid-template-rows: repeat(3, 10px);
+  grid-template-columns: repeat(var(--n, 3), 10px);
+  grid-template-rows: repeat(var(--n, 3), 10px);
   gap: 1px;
   padding: 3px;
   border: 2px solid transparent;
@@ -467,3 +467,7 @@ code {
   text-align: center;
 }
 
+
+.grid4 {
+  width: min(100%, 260px, max(36dvh, 232px));
+}

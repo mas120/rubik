@@ -1,5 +1,5 @@
 import { COLOUR_NAME } from '../colors'
-import type { Face } from '../core'
+import type { Face, ValidationError4 } from '../core'
 import { MOVE_DESC } from './texts'
 
 export const STAGES4 = ['centres', 'edges', 'parity'] as const
@@ -136,3 +136,34 @@ export const MOVE_DESC4: Record<string, string> = (() => {
   }
   return out
 })()
+
+export const FACE_NAME4: Record<Face, string> = {
+  F: 'mặt trước',
+  R: 'mặt phải',
+  B: 'mặt sau',
+  L: 'mặt trái',
+  U: 'mặt trên',
+  D: 'mặt dưới',
+}
+
+export const INSTRUCTIONS4: Record<Face, string> = {
+  F: 'Chọn một mặt làm mặt trước và giữ nguyên cách cầm đó. Nhập mặt đang hướng về bạn.',
+  R: 'Giữ mặt trên ở trên, xoay khối để mặt bên phải hướng về bạn.',
+  B: 'Giữ mặt trên ở trên, xoay tiếp để mặt sau hướng về bạn.',
+  L: 'Giữ mặt trên ở trên, xoay tiếp để mặt bên trái hướng về bạn.',
+  U: 'Quay về tư thế ban đầu, rồi nghiêng khối về phía bạn để nhìn thẳng vào mặt trên — mặt trước nằm phía dưới.',
+  D: 'Từ tư thế ban đầu, ngửa khối ra sau để nhìn thẳng vào mặt dưới — mặt trước nằm phía trên.',
+}
+
+export function validationMessage4(error: ValidationError4): string {
+  switch (error.kind) {
+    case 'colourCount':
+      return `Màu ${COLOUR_NAME[error.colour]} đang có ${error.count} ô, cần đúng 16 ô.`
+    case 'corners':
+      return 'Có viên góc mang tổ hợp màu không tồn tại. Kiểm tra lại các ô ở góc.'
+    case 'cornerTwist':
+      return 'Có một viên góc bị xoay sai. Kiểm tra lại các ô ở góc.'
+    case 'wings':
+      return 'Có viên cạnh mang tổ hợp màu không tồn tại hoặc bị nhập trùng. Kiểm tra lại các ô ở cạnh.'
+  }
+}

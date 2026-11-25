@@ -12,12 +12,12 @@ import { FreePlay } from './screens/FreePlay'
 import { Home } from './screens/Home'
 import { Input } from './screens/Input'
 import { Lesson } from './screens/Lesson'
-import { clearDraft, clearLesson, loadLesson, loadSize, saveLesson, saveSize } from './storage'
+import { clearDraft, clearDraft4, clearLesson, loadLesson, loadSize, saveLesson, saveSize } from './storage'
 
 type Screen =
   | { name: 'home' }
   | { name: 'free'; persist: boolean; size?: 3 | 4 }
-  | { name: 'input'; prefill?: Cube; persist: boolean }
+  | { name: 'input'; n: 3 | 4; prefill?: Cube; persist: boolean }
   | { name: 'lesson'; id: number; n: 3 | 4; cube: Cube; cursor: number; extra: string[]; persist: boolean }
 
 function scrambledCube(rng: () => number): Cube {
@@ -54,7 +54,9 @@ function initialScreen(): Screen {
   if (params.get('screen') === 'free') {
     return { name: 'free', persist: false, size: params.get('size') === '4' ? 4 : 3 }
   }
-  if (params.get('screen') === 'input') return { name: 'input', persist: false }
+  if (params.get('screen') === 'input') {
+    return { name: 'input', n: params.get('size') === '4' ? 4 : 3, persist: false }
+  }
   return { name: 'home' }
 }
 
@@ -93,13 +95,17 @@ function App() {
   if (screen.name === 'input') {
     return (
       <Input
-        key={screen.prefill ? 'prefill' : 'blank'}
+        key={`${screen.n}-${screen.prefill ? 'prefill' : 'blank'}`}
+        n={screen.n}
         prefill={screen.prefill}
         persist={screen.persist}
         onBack={goHome}
         onStart={(cube) => {
-          if (screen.persist && !screen.prefill) clearDraft()
-          startLesson(3, cube, 0, true)
+          if (screen.persist && !screen.prefill) {
+            if (screen.n === 3) clearDraft()
+            else clearDraft4()
+          }
+          startLesson(screen.n, cube, 0, true)
         }}
       />
     )
@@ -120,7 +126,7 @@ function App() {
           goHome()
         }}
         onRestart={(cube) => startLesson(screen.n, cube, 0, screen.persist)}
-        onReenter={(cube) => setScreen({ name: 'input', prefill: cube, persist: screen.persist })}
+        onReenter={(cube) => setScreen({ name: 'input', n: screen.n, prefill: cube, persist: screen.persist })}
       />
     )
   }
@@ -131,7 +137,7 @@ function App() {
       size={size}
       onSize={chooseSize}
       onContinue={() => saved && startLesson(saved.n, saved.cube, saved.cursor, true, saved.extra)}
-      onInput={() => setScreen({ name: 'input', persist: true })}
+      onInput={() => setScreen({ name: 'input', n: size, persist: true })}
       onSample={() => startLesson(size, size === 4 ? scrambledCube4(Math.random) : scrambledCube(Math.random), 0, true)}
       onFree={() => setScreen({ name: 'free', persist: true })}
     />

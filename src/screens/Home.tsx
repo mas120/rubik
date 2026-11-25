@@ -34,10 +34,9 @@ export function Home({ hasSaved, size, onSize, onContinue, onInput, onSample, on
             Tiếp tục bài đang học
           </button>
         )}
-        <button className={hasSaved ? 'btn' : 'btn primary'} disabled={size === 4} onClick={onInput}>
+        <button className={hasSaved ? 'btn' : 'btn primary'} onClick={onInput}>
           Nhập khối của bạn
         </button>
-        {size === 4 && <p className="hint-line">Nhập màu cho 4×4 đang được xây dựng.</p>}
         <button className="btn" onClick={onSample}>
           Thử với khối mẫu
         </button>

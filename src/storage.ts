@@ -9,6 +9,7 @@ import {
   parseMoves,
   solve,
   validate,
+  validate4,
   type Cube,
   type Face,
   type Move,
@@ -16,6 +17,7 @@ import {
 
 const LESSON_KEY = 'rubik.lesson.v1'
 const INPUT_KEY = 'rubik.input.v1'
+const INPUT4_KEY = 'rubik.input4.v1'
 const FREE_KEY = 'rubik.free.v1'
 const FREE4_KEY = 'rubik.free4.v1'
 const FREE_SIZE_KEY = 'rubik.free.size'
@@ -78,7 +80,7 @@ export function loadLesson(): SavedLesson | null {
       if (!FACES.includes(ch as Face)) throw new Error('invalid')
       return ch as Face
     })
-    if (!cheapValid4(cube)) throw new Error('invalid')
+    if (!cheapValid4(cube) || validate4(cube).length > 0) throw new Error('invalid')
     return { n, cube, cursor: data.cursor, extra }
   } catch {
     clearLesson()
@@ -95,18 +97,7 @@ export function saveDraft(cells: readonly (Face | null)[]): void {
 }
 
 export function loadDraft(): (Face | null)[] | null {
-  try {
-    const raw = localStorage.getItem(INPUT_KEY)
-    if (!raw || raw.length !== 54) return null
-    const cells = [...raw].map((ch) => {
-      if (ch === '.') return null
-      if (!FACES.includes(ch as Face)) throw new Error('invalid')
-      return ch as Face
-    })
-    return cells
-  } catch {
-    return null
-  }
+  return readDraft(INPUT_KEY, 54)
 }
 
 export function clearDraft(): void {
@@ -114,6 +105,40 @@ export function clearDraft(): void {
     localStorage.removeItem(INPUT_KEY)
   } catch {
     return
+  }
+}
+
+export function saveDraft4(cells: readonly (Face | null)[]): void {
+  try {
+    localStorage.setItem(INPUT4_KEY, cells.map((c) => c ?? '.').join(''))
+  } catch {
+    return
+  }
+}
+
+export function loadDraft4(): (Face | null)[] | null {
+  return readDraft(INPUT4_KEY, 96)
+}
+
+export function clearDraft4(): void {
+  try {
+    localStorage.removeItem(INPUT4_KEY)
+  } catch {
+    return
+  }
+}
+
+function readDraft(key: string, length: number): (Face | null)[] | null {
+  try {
+    const raw = localStorage.getItem(key)
+    if (!raw || raw.length !== length) return null
+    return [...raw].map((ch) => {
+      if (ch === '.') return null
+      if (!FACES.includes(ch as Face)) throw new Error('invalid')
+      return ch as Face
+    })
+  } catch {
+    return null
   }
 }
 

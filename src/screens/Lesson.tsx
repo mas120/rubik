@@ -242,11 +242,12 @@ function LessonBody({
           </button>
           {menuOpen && (
             <div className="menu">
-              {n === 3 && (
-                <button className="btn" onClick={() => onReenter(toHomeOrientation(displayed).cube)}>
-                  Nhập lại khối
-                </button>
-              )}
+              <button
+                className="btn"
+                onClick={() => onReenter(n === 3 ? toHomeOrientation(displayed).cube : displayed)}
+              >
+                Nhập lại khối
+              </button>
               <button className="btn" onClick={onHome}>
                 Về trang đầu
               </button>
