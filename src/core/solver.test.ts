@@ -7,9 +7,10 @@ import {
   isSolved,
   mulberry32,
   randomScramble,
+  toHomeOrientation,
   type Cube,
 } from './cube'
-import { ALGS, solve, stageDone, type Solution, type StageId, type Step } from './solver'
+import { ALGS, locatePiece, solve, stageDone, type Solution, type StageId, type Step } from './solver'
 
 const STAGES: StageId[] = [
   'daisy',
@@ -124,6 +125,27 @@ describe('solve', () => {
       expect(applications(solution.steps, 'cornerCycle')).toBeLessThanOrEqual(3)
     }
     expect(maxMoves).toBeLessThanOrEqual(250)
+  })
+
+  it('keeps a home orientation after any prefix', () => {
+    for (const { cube, solution } of samples.slice(0, 200)) {
+      for (const n of [0, 7, 40, 90, solution.moves.length]) {
+        const mid = applyMoves(cube, solution.moves.slice(0, n))
+        const { cube: home, rotation } = toHomeOrientation(mid)
+        expect(rotation.every((m) => m.startsWith('y'))).toBe(true)
+        expect([4, 13, 22, 31, 40, 49].map((i) => home[i]).join('')).toBe('URFDLB')
+      }
+    }
+  })
+
+  it('locates pieces in any orientation', () => {
+    expect(locatePiece(SOLVED, 'DF')?.name).toBe('DF')
+    expect(locatePiece(applyMove(SOLVED, 'y'), 'DFR')?.name).toBe('DFL')
+    expect(locatePiece(SOLVED, 'UD')).toBeNull()
+    const { cube, solution } = samples[0]
+    const start = locatePiece(cube, 'DFR')!
+    expect(new Set(start.facelets.map((i) => cube[i]))).toEqual(new Set(['D', 'F', 'R']))
+    expect(locatePiece(toHomeOrientation(applyMoves(cube, solution.moves)).cube, 'DFR')?.name).toBe('DFR')
   })
 
   it('returns no steps for SOLVED', () => {

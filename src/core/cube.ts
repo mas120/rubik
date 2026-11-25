@@ -50,9 +50,9 @@ export const CORNER_SLOTS: readonly Slot[] = [
   makeSlot('DBR', [35, 17, 51]),
 ]
 
-type Vec = readonly [number, number, number]
+export type Vec = readonly [number, number, number]
 
-const NORMALS: Record<Face, Vec> = {
+export const FACE_NORMALS: Record<Face, Vec> = {
   U: [0, 1, 0],
   R: [1, 0, 0],
   F: [0, 0, 1],
@@ -86,7 +86,7 @@ function stickerGeometry(index: number): { pos: Vec; normal: Vec } {
       pos = [1 - c, 1 - r, -1]
       break
   }
-  return { pos, normal: NORMALS[face] }
+  return { pos, normal: FACE_NORMALS[face] }
 }
 
 const dot = (a: Vec, b: Vec) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
@@ -103,12 +103,12 @@ function clockwise(v: Vec, axis: Vec): Vec {
   return [-c[0] + axis[0] * d, -c[1] + axis[1] * d, -c[2] + axis[2] * d]
 }
 
-const GEOMETRY = Array.from({ length: 54 }, (_, i) => stickerGeometry(i))
-const KEY_TO_INDEX = new Map(GEOMETRY.map((g, i) => [`${g.pos}|${g.normal}`, i]))
+export const STICKER_GEOMETRY: readonly { pos: Vec; normal: Vec }[] = Array.from({ length: 54 }, (_, i) => stickerGeometry(i))
+const KEY_TO_INDEX = new Map(STICKER_GEOMETRY.map((g, i) => [`${g.pos}|${g.normal}`, i]))
 
 function quarterTurnTable(axis: Vec, wholeCube: boolean): number[] {
   const table = Array.from({ length: 54 }, (_, i) => i)
-  GEOMETRY.forEach(({ pos, normal }, i) => {
+  STICKER_GEOMETRY.forEach(({ pos, normal }, i) => {
     if (!wholeCube && dot(pos, axis) !== 1) return
     const target = KEY_TO_INDEX.get(`${clockwise(pos, axis)}|${clockwise(normal, axis)}`)!
     table[target] = i
@@ -131,13 +131,13 @@ const TURN_SUFFIXES: readonly [Turn, number][] = [
 const TABLES = new Map<Move, number[]>()
 
 for (const face of FACES) {
-  const base = quarterTurnTable(NORMALS[face], false)
+  const base = quarterTurnTable(FACE_NORMALS[face], false)
   for (const [suffix, times] of TURN_SUFFIXES) {
     TABLES.set(`${face}${suffix}`, composePower(base, times))
   }
 }
 {
-  const base = quarterTurnTable(NORMALS.U, true)
+  const base = quarterTurnTable(FACE_NORMALS.U, true)
   for (const [suffix, times] of TURN_SUFFIXES) {
     TABLES.set(`y${suffix}` as RotationMove, composePower(base, times))
   }
@@ -188,6 +188,15 @@ export function cubeFromString(text: string): Cube {
     if (!FACES.includes(ch as Face)) throw new Error(`Invalid sticker: ${ch}`)
     return ch as Face
   })
+}
+
+export function toHomeOrientation(cube: Cube): { cube: Cube; rotation: Move[] } {
+  const rotations: Move[][] = [[], ['y'], ['y2'], ["y'"]]
+  for (const rotation of rotations) {
+    const rotated = applyMoves(cube, rotation)
+    if (rotated[22] === 'F') return { cube: rotated, rotation }
+  }
+  return { cube, rotation: [] }
 }
 
 export function isSolved(cube: Cube): boolean {

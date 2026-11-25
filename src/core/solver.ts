@@ -99,6 +99,13 @@ function centreColours(cube: Cube, slot: Slot): Face[] {
   return slot.faces.map((f) => centre(cube, f))
 }
 
+export function locatePiece(cube: Cube, piece: string): Slot | null {
+  const faces = [...piece] as Face[]
+  const slots = faces.length === 2 ? EDGE_SLOTS : faces.length === 3 ? CORNER_SLOTS : []
+  const key = setKey(faces)
+  return slots.find((s) => setKey(colours(cube, s)) === key) ?? null
+}
+
 function slotHolding(cube: Cube, slots: readonly Slot[], faces: readonly Face[]): Slot {
   const key = setKey(faces)
   return slots.find((s) => setKey(colours(cube, s)) === key)!
