@@ -2,34 +2,45 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { CubeCanvas, type CubeCanvasHandle } from '../components/CubeCanvas'
 import {
   ALGS,
+  applyMove,
+  applyMoves,
   formatMoves,
   invertMove,
+  isSolved,
   locatePiece,
   solve,
   toHomeOrientation,
   type Cube,
+  type Move,
   type StageId,
 } from '../core'
 import { buildLesson, cubeAt } from '../lesson/lesson'
+import { applyUserMove, isHalfTurnPartial } from '../lesson/track'
 import {
   ALG_NAME,
+  DRAG_HINT,
+  HALF_TURN_MESSAGE,
   MOVE_DESC,
   STAGE_ALGS,
   STAGE_ORDER,
   STAGE_TEXT,
   SETUP_HINT,
   explainStep,
+  offTrackMessage,
 } from '../lesson/texts'
 import { saveLesson } from '../storage'
 
 const MOVE_MS = 350
+const DRAG_MS = 180
 
 interface Props {
   cube: Cube
   initialCursor: number
+  initialExtra: Move[]
   persist: boolean
   onHome(): void
   onFinish(): void
+  onRestart(cube: Cube): void
   onReenter(cube: Cube): void
 }
 
@@ -37,10 +48,20 @@ interface WakeLockSentinelLike {
   release(): Promise<void>
 }
 
-export function Lesson({ cube, initialCursor, persist, onHome, onFinish, onReenter }: Props) {
+export function Lesson({
+  cube,
+  initialCursor,
+  initialExtra,
+  persist,
+  onHome,
+  onFinish,
+  onRestart,
+  onReenter,
+}: Props) {
   const solution = useMemo(() => solve(cube), [cube])
   const items = useMemo(() => buildLesson(solution), [solution])
   const [cursor, setCursor] = useState(() => Math.max(0, Math.min(initialCursor, items.length - 1)))
+  const [extra, setExtra] = useState<Move[]>(initialExtra)
   const [busy, setBusy] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const canvas = useRef<CubeCanvasHandle>(null)
@@ -54,17 +75,27 @@ export function Lesson({ cube, initialCursor, persist, onHome, onFinish, onReent
     [step, current],
   )
 
-  useEffect(() => {
-    canvas.current?.setState(current, highlight)
-  }, [current, highlight])
+  const offTrack = extra.length > 0
+  const displayed = useMemo(() => applyMoves(current, extra), [current, extra])
+  const handleUserMove = useRef<(move: Move) => void>(() => undefined)
 
   useEffect(() => {
-    canvas.current?.setArrows(item.type === 'move' && !busy ? item.move : null)
-  }, [item, busy])
+    canvas.current?.setState(displayed, offTrack ? null : highlight)
+  }, [displayed, highlight, offTrack])
 
   useEffect(() => {
-    if (persist) saveLesson(cube, cursor)
-  }, [cube, cursor, persist])
+    canvas.current?.setArrows(item.type === 'move' && !busy && !offTrack ? item.move : null)
+  }, [item, busy, offTrack])
+
+  useEffect(() => {
+    const handle = canvas.current
+    handle?.setInteractive(item.type === 'move' ? (move) => handleUserMove.current(move) : null)
+    return () => handle?.setInteractive(null)
+  }, [item.type])
+
+  useEffect(() => {
+    if (persist) saveLesson(cube, cursor, extra)
+  }, [cube, cursor, extra, persist])
 
   useEffect(() => {
     let sentinel: WakeLockSentinelLike | null = null
@@ -126,6 +157,35 @@ export function Lesson({ cube, initialCursor, persist, onHome, onFinish, onReent
       setCursor(cursor - 1)
     })
 
+  const onUserMove = (move: Move) => {
+    if (busyRef.current || item.type !== 'move') return
+    const next = cubeAt(cube, solution, items, cursor + 1)
+    const result = applyUserMove(current, next, extra, move)
+    void run(async () => {
+      await canvas.current?.animateMove(move, displayed, applyMove(displayed, move), DRAG_MS)
+      if (result.advance) setCursor(cursor + 1)
+      setExtra(result.extra)
+    })
+  }
+
+  useEffect(() => {
+    handleUserMove.current = onUserMove
+  })
+
+  const undoExtra = () =>
+    run(async () => {
+      const last = extra.at(-1)
+      if (!last) return
+      const inverse = invertMove(last)
+      await canvas.current?.animateMove(inverse, displayed, applyMove(displayed, inverse), DRAG_MS)
+      setExtra(extra.slice(0, -1))
+    })
+
+  const continueFromHere = () => {
+    if (isSolved(displayed)) onFinish()
+    else onRestart(toHomeOrientation(displayed).cube)
+  }
+
   const replay = () =>
     run(async () => {
       if (item.type !== 'move') return
@@ -160,7 +220,7 @@ export function Lesson({ cube, initialCursor, persist, onHome, onFinish, onReent
           </button>
           {menuOpen && (
             <div className="menu">
-              <button className="btn" onClick={() => onReenter(toHomeOrientation(current).cube)}>
+              <button className="btn" onClick={() => onReenter(toHomeOrientation(displayed).cube)}>
                 Nhập lại khối
               </button>
               <button className="btn" onClick={onHome}>
@@ -175,7 +235,7 @@ export function Lesson({ cube, initialCursor, persist, onHome, onFinish, onReent
       </header>
 
       <div className="canvas-wrap">
-        <CubeCanvas ref={canvas} initial={current} initialHighlight={highlight} />
+        <CubeCanvas ref={canvas} initial={displayed} initialHighlight={offTrack ? null : highlight} />
         <button className="btn small reset-view" onClick={() => canvas.current?.resetCamera()}>
           Đặt lại góc nhìn
         </button>
@@ -198,7 +258,12 @@ export function Lesson({ cube, initialCursor, persist, onHome, onFinish, onReent
               )}
             </>
           )}
-          {item.type === 'move' && step && (
+          {item.type === 'move' && step && offTrack && (
+            <p className="explain">
+              {isHalfTurnPartial(item.move, extra) ? HALF_TURN_MESSAGE : offTrackMessage(extra.length)}
+            </p>
+          )}
+          {item.type === 'move' && step && !offTrack && (
             <>
               <p className="explain">{explainStep(step)}</p>
               {item.phase === 'setup' && <p className="hint">{SETUP_HINT}</p>}
@@ -225,6 +290,7 @@ export function Lesson({ cube, initialCursor, persist, onHome, onFinish, onReent
                 </div>
               )}
               <p className="move-desc">{MOVE_DESC[item.move]}</p>
+              {item.stepIndex === 0 && <p className="hint">{DRAG_HINT}</p>}
             </>
           )}
           {item.type === 'done' && (
@@ -236,7 +302,16 @@ export function Lesson({ cube, initialCursor, persist, onHome, onFinish, onReent
         </div>
 
         <footer className="buttons">
-          {item.type === 'done' ? (
+          {offTrack ? (
+            <>
+              <button className="btn" disabled={busy} onClick={undoExtra}>
+                Hoàn tác
+              </button>
+              <button className="btn primary" disabled={busy} onClick={continueFromHere}>
+                Giải tiếp từ đây
+              </button>
+            </>
+          ) : item.type === 'done' ? (
             <>
               <button className="btn" disabled={busy || cursor === 0} onClick={back}>
                 Lùi

@@ -20,11 +20,12 @@ const FREE_KEY = 'rubik.free.v1'
 export interface SavedLesson {
   cube: Cube
   cursor: number
+  extra: Move[]
 }
 
-export function saveLesson(cube: Cube, cursor: number): void {
+export function saveLesson(cube: Cube, cursor: number, extra: readonly Move[] = []): void {
   try {
-    localStorage.setItem(LESSON_KEY, JSON.stringify({ cube: cubeToString(cube), cursor }))
+    localStorage.setItem(LESSON_KEY, JSON.stringify({ cube: cubeToString(cube), cursor, extra }))
   } catch {
     return
   }
@@ -42,7 +43,9 @@ export function loadLesson(): SavedLesson | null {
   try {
     const raw = localStorage.getItem(LESSON_KEY)
     if (!raw) return null
-    const data = JSON.parse(raw) as { cube: string; cursor: number }
+    const data = JSON.parse(raw) as { cube: string; cursor: number; extra?: string[] }
+    const extra = data.extra === undefined ? [] : parseMoves(data.extra.join(' '))
+    if (extra.some((m) => /^[xyz]/.test(m))) throw new Error('invalid')
     const cube = cubeFromString(data.cube)
     const normalised = normalize(cube)
     if (!normalised || normalised.some((s, i) => s !== cube[i]) || validate(cube).length > 0) {
@@ -50,7 +53,7 @@ export function loadLesson(): SavedLesson | null {
     }
     solve(cube)
     if (!Number.isInteger(data.cursor) || data.cursor < 0) throw new Error('invalid')
-    return { cube, cursor: data.cursor }
+    return { cube, cursor: data.cursor, extra }
   } catch {
     clearLesson()
     return null

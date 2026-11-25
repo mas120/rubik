@@ -6,6 +6,7 @@ import {
   mulberry32,
   randomScramble,
   type Cube,
+  type Move,
 } from './core'
 import { FreePlay } from './screens/FreePlay'
 import { Home } from './screens/Home'
@@ -17,7 +18,7 @@ type Screen =
   | { name: 'home' }
   | { name: 'free'; persist: boolean }
   | { name: 'input'; prefill?: Cube; persist: boolean }
-  | { name: 'lesson'; id: number; cube: Cube; cursor: number; persist: boolean }
+  | { name: 'lesson'; id: number; cube: Cube; cursor: number; extra: Move[]; persist: boolean }
 
 function scrambledCube(rng: () => number): Cube {
   let cube = SOLVED
@@ -37,6 +38,7 @@ function initialScreen(): Screen {
       id: lessonId++,
       cube: scrambledCube(mulberry32(Number(demo))),
       cursor: Number.isFinite(at) ? Math.max(0, Math.floor(at)) : 0,
+      extra: [],
       persist: false,
     }
   }
@@ -49,9 +51,9 @@ function App() {
   const [screen, setScreen] = useState<Screen>(initialScreen)
   const [saved, setSaved] = useState(() => (screen.name === 'home' ? loadLesson() : null))
 
-  const startLesson = (cube: Cube, cursor: number, persist: boolean) => {
-    if (persist) saveLesson(cube, cursor)
-    setScreen({ name: 'lesson', id: lessonId++, cube, cursor, persist })
+  const startLesson = (cube: Cube, cursor: number, persist: boolean, extra: Move[] = []) => {
+    if (persist) saveLesson(cube, cursor, extra)
+    setScreen({ name: 'lesson', id: lessonId++, cube, cursor, extra, persist })
   }
 
   const goHome = () => {
@@ -84,12 +86,14 @@ function App() {
         key={screen.id}
         cube={screen.cube}
         initialCursor={screen.cursor}
+        initialExtra={screen.extra}
         persist={screen.persist}
         onHome={goHome}
         onFinish={() => {
           if (screen.persist) clearLesson()
           goHome()
         }}
+        onRestart={(cube) => startLesson(cube, 0, screen.persist)}
         onReenter={(cube) => setScreen({ name: 'input', prefill: cube, persist: screen.persist })}
       />
     )
@@ -98,7 +102,7 @@ function App() {
   return (
     <Home
       hasSaved={saved !== null}
-      onContinue={() => saved && startLesson(saved.cube, saved.cursor, true)}
+      onContinue={() => saved && startLesson(saved.cube, saved.cursor, true, saved.extra)}
       onInput={() => setScreen({ name: 'input', persist: true })}
       onSample={() => startLesson(scrambledCube(Math.random), 0, true)}
       onFree={() => setScreen({ name: 'free', persist: true })}
