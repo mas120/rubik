@@ -3,6 +3,7 @@ import {
   SOLVED,
   applyMoves,
   cubeFromString,
+  getModel,
   cubeToString,
   normalize,
   parseMoves,
@@ -16,6 +17,8 @@ import {
 const LESSON_KEY = 'rubik.lesson.v1'
 const INPUT_KEY = 'rubik.input.v1'
 const FREE_KEY = 'rubik.free.v1'
+const FREE4_KEY = 'rubik.free4.v1'
+const FREE_SIZE_KEY = 'rubik.free.size'
 
 export interface SavedLesson {
   cube: Cube
@@ -96,7 +99,7 @@ export interface SavedFree {
   history: Move[]
 }
 
-export function saveFree(cube: Cube, history: readonly Move[]): void {
+export function saveFree(cube: Cube, history: readonly string[]): void {
   try {
     localStorage.setItem(FREE_KEY, JSON.stringify({ cube: cubeToString(cube), history }))
   } catch {
@@ -122,5 +125,59 @@ export function loadFree(): SavedFree | null {
       return null
     }
     return null
+  }
+}
+
+export interface SavedFree4 {
+  cube: Cube
+  history: string[]
+}
+
+export function saveFree4(cube: Cube, history: readonly string[]): void {
+  try {
+    localStorage.setItem(FREE4_KEY, JSON.stringify({ cube: cubeToString(cube), history }))
+  } catch {
+    return
+  }
+}
+
+export function loadFree4(): SavedFree4 | null {
+  try {
+    const raw = localStorage.getItem(FREE4_KEY)
+    if (!raw) return null
+    const model = getModel(4)
+    const data = JSON.parse(raw) as { cube: string; history: string[] }
+    if (data.cube.length !== 96) throw new Error('invalid')
+    const cube = [...data.cube].map((ch) => {
+      if (!FACES.includes(ch as Face)) throw new Error('invalid')
+      return ch as Face
+    })
+    const history = model.parse(data.history.join(' '))
+    if (history.some((m) => /^[xyz]/.test(m))) throw new Error('invalid')
+    if (model.applyAll(model.solved, history).some((s, i) => s !== cube[i])) throw new Error('invalid')
+    return { cube, history }
+  } catch {
+    try {
+      localStorage.removeItem(FREE4_KEY)
+    } catch {
+      return null
+    }
+    return null
+  }
+}
+
+export function loadFreeSize(): 3 | 4 {
+  try {
+    return localStorage.getItem(FREE_SIZE_KEY) === '4' ? 4 : 3
+  } catch {
+    return 3
+  }
+}
+
+export function saveFreeSize(size: 3 | 4): void {
+  try {
+    localStorage.setItem(FREE_SIZE_KEY, String(size))
+  } catch {
+    return
   }
 }

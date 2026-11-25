@@ -5,6 +5,7 @@ import {
   applyMove,
   applyMoves,
   formatMoves,
+  getModel,
   invertMove,
   isSolved,
   locatePiece,
@@ -30,6 +31,7 @@ import {
 } from '../lesson/texts'
 import { saveLesson } from '../storage'
 
+const MODEL = getModel(3)
 const MOVE_MS = 350
 const DRAG_MS = 180
 
@@ -89,7 +91,7 @@ export function Lesson({
 
   useEffect(() => {
     const handle = canvas.current
-    handle?.setInteractive(item.type === 'move' ? (move) => handleUserMove.current(move) : null)
+    handle?.setInteractive(item.type === 'move' ? (move) => handleUserMove.current(move as Move) : null)
     return () => handle?.setInteractive(null)
   }, [item.type])
 
@@ -235,7 +237,7 @@ export function Lesson({
       </header>
 
       <div className="canvas-wrap">
-        <CubeCanvas ref={canvas} initial={displayed} initialHighlight={offTrack ? null : highlight} />
+        <CubeCanvas ref={canvas} model={MODEL} initial={displayed} initialHighlight={offTrack ? null : highlight} />
         <button className="btn small reset-view" onClick={() => canvas.current?.resetCamera()}>
           Đặt lại góc nhìn
         </button>

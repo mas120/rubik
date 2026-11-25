@@ -16,7 +16,7 @@ import { clearDraft, clearLesson, loadLesson, saveLesson } from './storage'
 
 type Screen =
   | { name: 'home' }
-  | { name: 'free'; persist: boolean }
+  | { name: 'free'; persist: boolean; size?: 3 | 4 }
   | { name: 'input'; prefill?: Cube; persist: boolean }
   | { name: 'lesson'; id: number; cube: Cube; cursor: number; extra: Move[]; persist: boolean }
 
@@ -42,7 +42,9 @@ function initialScreen(): Screen {
       persist: false,
     }
   }
-  if (params.get('screen') === 'free') return { name: 'free', persist: false }
+  if (params.get('screen') === 'free') {
+    return { name: 'free', persist: false, size: params.get('size') === '4' ? 4 : 3 }
+  }
   if (params.get('screen') === 'input') return { name: 'input', persist: false }
   return { name: 'home' }
 }
@@ -62,7 +64,14 @@ function App() {
   }
 
   if (screen.name === 'free') {
-    return <FreePlay persist={screen.persist} onHome={goHome} onTeach={(cube) => startLesson(cube, 0, true)} />
+    return (
+      <FreePlay
+        persist={screen.persist}
+        initialSize={screen.size}
+        onHome={goHome}
+        onTeach={(cube) => startLesson(cube, 0, true)}
+      />
+    )
   }
 
   if (screen.name === 'input') {
